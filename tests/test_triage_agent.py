@@ -95,6 +95,7 @@ def test_triage_rejects_invalid_cpf_without_consuming_attempt() -> None:
     state = agent.respond(state, "123")
 
     assert state["triage_stage"] == "awaiting_cpf"
+    assert state["user_message"] == "[REDACTED_CPF_INPUT]"
     assert state["authentication_attempts"] == 0
     assert repository.calls == 0
 
@@ -107,6 +108,7 @@ def test_triage_rejects_invalid_date_without_consuming_attempt() -> None:
     state = agent.respond(state, "20-05-1990")
 
     assert state["triage_stage"] == "awaiting_birth_date"
+    assert state["user_message"] == "[REDACTED_BIRTH_DATE_INPUT]"
     assert state["authentication_attempts"] == 0
     assert repository.calls == 0
 
@@ -117,6 +119,7 @@ def test_triage_authenticates_and_routes_credit_after_identity_confirmation() ->
     state = authenticate(agent)
 
     assert state["authenticated"] is True
+    assert state["user_message"] == "[REDACTED_BIRTH_DATE]"
     assert state["cpf"] == "00000000000"
     assert state["birth_date"] == "1990-05-20"
     assert state["customer_name"] == "Ana Exemplo"

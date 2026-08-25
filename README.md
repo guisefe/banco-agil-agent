@@ -9,9 +9,9 @@ projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza r
 negócio determinísticas, separação de responsabilidades, testes automatizados,
 rastreabilidade e proteção de dados pessoais.
 
-> **Status atual:** fundação de engenharia e núcleo determinístico da Triagem concluídos.
-> Orquestração, interface e demais agentes serão implementados incrementalmente e só serão
-> marcados como concluídos após testes automatizados.
+> **Status atual:** fundação, núcleo determinístico da Triagem, orquestração inicial e
+> interface Streamlit concluídos. Os agentes de destino serão conectados incrementalmente
+> e só serão marcados como concluídos após testes automatizados.
 
 ## Visão Geral do Projeto
 
@@ -101,6 +101,9 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Identificação determinística de intenção após autenticação.
 - [x] Tratamento controlado de arquivo ausente, esquema inválido e registro duplicado.
 - [x] Encerramento durante a Triagem com remoção dos dados pessoais do estado.
+- [x] Orquestração dos turnos da Triagem com LangGraph.
+- [x] Interface Streamlit com histórico sensível mascarado.
+- [x] Composição explícita entre configurações, repositórios, auditoria, agente e grafo.
 
 ### Roadmap do desafio
 
@@ -110,7 +113,7 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [ ] Solicitação e decisão de aumento de limite.
 - [ ] Agente de Entrevista e recálculo de score entre 0 e 1000.
 - [ ] Agente de Câmbio com API externa e tratamento de indisponibilidade.
-- [ ] Interface conversacional com Streamlit.
+- [x] Interface conversacional inicial com Streamlit.
 - [ ] Testes de integração do atendimento completo.
 
 ## Estrutura do Código
@@ -120,9 +123,9 @@ app/
 ├── agents/          # Comportamento e escopo de cada agente
 ├── audit/           # Eventos, pseudonimização e persistência de auditoria
 ├── models/          # Estado e tipos compartilhados da conversa
-├── tools/           # CSV, score, câmbio, autenticação e encerramento (planejado)
-├── graph/           # Orquestração e roteamento entre agentes (planejado)
-└── ui/              # Interface Streamlit (planejado)
+├── tools/           # Identidade e encerramento; score e câmbio entram nas próximas sprints
+├── graph/           # Orquestração e roteamento incremental entre agentes
+└── ui/              # Interface Streamlit e proteção de dados exibidos
 tests/               # Testes unitários e de integração
 docs/                # Decisões de arquitetura, privacidade e operação
 ```
@@ -191,6 +194,14 @@ cd banco-agil-agent
 uv sync --locked --dev
 ```
 
+Para manter uma referência de auditoria estável entre reinicializações, configure uma
+chave secreta de pelo menos 32 bytes. Sem ela, a demonstração gera uma chave efêmera segura
+por processo:
+
+```bash
+export AUDIT_PSEUDONYMIZATION_KEY="substitua-por-um-segredo-com-32-bytes-ou-mais"
+```
+
 ### Testes e qualidade
 
 ```bash
@@ -205,9 +216,20 @@ Esses mesmos comandos são executados automaticamente pelo GitHub Actions.
 
 ### Executar a aplicação
 
-A interface ainda está no roadmap. Após a implementação da UI, esta seção será atualizada
-com o comando real do Streamlit e as variáveis de ambiente necessárias. Nenhuma chave de
-API deve ser adicionada ao repositório.
+```bash
+uv run streamlit run streamlit_app.py
+```
+
+Use um dos clientes fictícios para testar a Triagem:
+
+| CPF | Nascimento |
+| --- | --- |
+| `000.000.000-00` | `20/05/1990` |
+| `111.111.111-11` | `03/11/1985` |
+
+Depois da autenticação, solicite crédito, entrevista ou cotação. Nesta etapa, a UI conclui
+o handoff e bloqueia novas mensagens até o agente de destino ser implementado. Nenhuma
+chave real deve ser adicionada ao repositório.
 
 ## Segurança e Privacidade
 

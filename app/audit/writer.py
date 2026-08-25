@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
@@ -7,6 +8,10 @@ from typing import Protocol
 from app.audit.events import AuditEvent
 
 _AUDIT_WRITE_LOCK = Lock()
+
+
+class AuditWriteError(RuntimeError):
+    """Raised when an audit event cannot be persisted safely."""
 
 
 class AuditWriter(Protocol):
@@ -33,6 +38,14 @@ class JsonlAuditWriter:
         )
 
         with _AUDIT_WRITE_LOCK:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with self._path.open("a", encoding="utf-8") as audit_file:
-                audit_file.write(f"{serialized_event}\n")
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                if not self._path.exists():
+                    self._path.touch(mode=0o600)
+
+                with self._path.open("a", encoding="utf-8") as audit_file:
+                    audit_file.write(f"{serialized_event}\n")
+                    audit_file.flush()
+                    os.fsync(audit_file.fileno())
+            except OSError as error:
+                raise AuditWriteError("failed to persist audit event") from error

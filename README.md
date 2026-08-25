@@ -217,7 +217,3 @@ conformidade legal para uso bancário em produção.
 
 Consulte [docs/PRIVACY_AND_AUDIT.md](docs/PRIVACY_AND_AUDIT.md) para conhecer o contrato de
 minimização, as limitações do JSONL, os requisitos de produção e as referências oficiais.
-
-## Relatórios de Sprint
-
-- [Sprint 1 - Núcleo Determinístico da Triagem](docs/sprints/SPRINT_01_TRIAGE.md)

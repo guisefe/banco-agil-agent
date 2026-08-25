@@ -14,8 +14,8 @@ dev = [
 
 
 [tool.pytest.ini_options]
-testpaths =["tests"]
-pythonpath =["."]
+testpaths = ["tests"]
+pythonpath = ["."]
 addopts = [
     "-ra",
     "--strict-markers",
@@ -34,10 +34,10 @@ show_missing = true
 line-length = 100
 target-version = "py312"
 
-[toll.ruff.lint]
-select = ["E", "F", "i", "B"]
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
 
-[toll.mypy]
-python_version ="3.12"
+[tool.mypy]
+python_version = "3.12"
 strict = true
 files = ["app"]

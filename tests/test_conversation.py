@@ -13,6 +13,7 @@ def test_initial_state_uses_safe_defaults() -> None:
 
     assert state["authenticated"] is False
     assert state["cpf"] is None
+    assert state["birth_date"] is None
     assert state["customer_name"] is None
     assert state["authentication_attempts"] == 0
 

@@ -31,6 +31,7 @@ class ConversationState(TypedDict):
 
     authenticated: bool
     cpf: str | None
+    birth_date: str | None
     customer_name: str | None
     authentication_attempts: int
 
@@ -48,6 +49,7 @@ def initial_state() -> ConversationState:
         "assistant_message": "",
         "authenticated": False,
         "cpf": None,
+        "birth_date": None,
         "customer_name": None,
         "authentication_attempts": 0,
         "active_agent": "triage",

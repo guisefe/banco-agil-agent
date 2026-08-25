@@ -9,9 +9,9 @@ projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza r
 negócio determinísticas, separação de responsabilidades, testes automatizados,
 rastreabilidade e proteção de dados pessoais.
 
-> **Status atual:** fundação de estado, auditoria e qualidade concluída. Os fluxos dos
-> agentes serão implementados incrementalmente e só serão marcados como concluídos após
-> testes automatizados.
+> **Status atual:** fundação de engenharia e núcleo determinístico da Triagem concluídos.
+> Orquestração, interface e demais agentes serão implementados incrementalmente e só serão
+> marcados como concluídos após testes automatizados.
 
 ## Visão Geral do Projeto
 
@@ -96,10 +96,15 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Testes automatizados e cobertura mínima obrigatória de 80%.
 - [x] CI com formatação, lint, tipagem e testes.
 - [x] Dependabot para dependências Python/uv e GitHub Actions.
+- [x] Validação de CPF e data de nascimento em `clientes.csv`.
+- [x] Controle de até três tentativas consecutivas de autenticação.
+- [x] Identificação determinística de intenção após autenticação.
+- [x] Tratamento controlado de arquivo ausente, esquema inválido e registro duplicado.
+- [x] Encerramento durante a Triagem com remoção dos dados pessoais do estado.
 
 ### Roadmap do desafio
 
-- [ ] Agente de Triagem e autenticação com até três tentativas.
+- [x] Núcleo do Agente de Triagem e autenticação com até três tentativas.
 - [ ] Roteamento autenticado e encerramento global.
 - [ ] Agente de Crédito e consulta de limite.
 - [ ] Solicitação e decisão de aumento de limite.

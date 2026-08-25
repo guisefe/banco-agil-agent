@@ -84,11 +84,13 @@ class TriageAgent:
         try:
             cpf = normalize_cpf(user_message)
         except IdentityInputError:
+            state["user_message"] = "[REDACTED_CPF_INPUT]"
             state["assistant_message"] = (
                 "O CPF deve conter 11 números. Confira o valor e tente novamente."
             )
             return state
 
+        state["user_message"] = "[REDACTED_CPF]"
         state["cpf"] = cpf
         state["triage_stage"] = "awaiting_birth_date"
         state["assistant_message"] = "Agora informe sua data de nascimento no formato DD/MM/AAAA."
@@ -99,6 +101,7 @@ class TriageAgent:
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
+        state["user_message"] = "[REDACTED_BIRTH_DATE_INPUT]"
         try:
             birth_date = parse_birth_date(user_message)
         except IdentityInputError:
@@ -107,6 +110,7 @@ class TriageAgent:
             )
             return state
 
+        state["user_message"] = "[REDACTED_BIRTH_DATE]"
         cpf = state["cpf"]
         if cpf is None:
             raise ValueError("cpf is required before authentication")

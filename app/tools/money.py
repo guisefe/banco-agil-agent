@@ -7,6 +7,13 @@ _MONEY_PATTERN = re.compile(
 
 
 def parse_money(value: str) -> Decimal:
+    amount = parse_non_negative_money(value)
+    if amount <= 0:
+        raise ValueError("monetary value must be positive")
+    return amount
+
+
+def parse_non_negative_money(value: str) -> Decimal:
     normalized = "".join(value.strip().split())
     if not _MONEY_PATTERN.fullmatch(normalized):
         raise ValueError("invalid monetary value")
@@ -22,8 +29,6 @@ def parse_money(value: str) -> Decimal:
         amount = Decimal(normalized).quantize(Decimal("0.01"))
     except InvalidOperation as error:
         raise ValueError("invalid monetary value") from error
-    if amount <= 0:
-        raise ValueError("monetary value must be positive")
     return amount
 
 

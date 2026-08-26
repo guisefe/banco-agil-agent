@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.tools.money import format_brl, parse_money
+from app.tools.money import format_brl, parse_money, parse_non_negative_money
 
 
 @pytest.mark.parametrize(
@@ -32,3 +32,13 @@ def test_parse_money_rejects_invalid_or_non_positive_values(value: str) -> None:
 
 def test_format_brl_uses_decimal_safe_brazilian_format() -> None:
     assert format_brl(Decimal("1234567.8")) == "R$ 1.234.567,80"
+
+
+def test_parse_non_negative_money_accepts_zero_for_financial_profile() -> None:
+    assert parse_non_negative_money("0") == Decimal("0.00")
+
+
+@pytest.mark.parametrize("value", ["-1", "abc", "Infinity"])
+def test_parse_non_negative_money_rejects_invalid_values(value: str) -> None:
+    with pytest.raises(ValueError, match="invalid"):
+        parse_non_negative_money(value)

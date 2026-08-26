@@ -2,6 +2,8 @@ from decimal import Decimal
 from typing import Literal, TypedDict
 from uuid import uuid4
 
+from app.models.interview import EmploymentType
+
 AgentName = Literal[
     "triage",
     "credit",
@@ -20,6 +22,14 @@ CreditStage = Literal[
     "awaiting_action",
     "awaiting_requested_limit",
     "offering_interview",
+]
+
+InterviewStage = Literal[
+    "awaiting_income",
+    "awaiting_employment",
+    "awaiting_expenses",
+    "awaiting_dependents",
+    "awaiting_debts",
 ]
 
 EndReason = Literal[
@@ -46,6 +56,12 @@ class ConversationState(TypedDict):
     triage_stage: TriageStage
     credit_stage: CreditStage
     requested_credit_limit: Decimal | None
+    interview_stage: InterviewStage
+    monthly_income: Decimal | None
+    employment_type: EmploymentType | None
+    fixed_expenses: Decimal | None
+    dependents: int | None
+    has_active_debts: bool | None
 
     end_reason: EndReason | None
 
@@ -65,5 +81,11 @@ def initial_state() -> ConversationState:
         "triage_stage": "greeting",
         "credit_stage": "awaiting_action",
         "requested_credit_limit": None,
+        "interview_stage": "awaiting_income",
+        "monthly_income": None,
+        "employment_type": None,
+        "fixed_expenses": None,
+        "dependents": None,
+        "has_active_debts": None,
         "end_reason": None,
     }

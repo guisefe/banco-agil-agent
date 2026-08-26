@@ -41,4 +41,5 @@ def end_conversation(
     ended_state["cpf"] = None
     ended_state["birth_date"] = None
     ended_state["customer_name"] = None
+    ended_state["requested_credit_limit"] = None
     return ended_state

@@ -27,7 +27,7 @@ def test_streamlit_app_starts_triage_without_exceptions(
     assert not app.warning
 
 
-def test_streamlit_app_masks_identity_and_blocks_after_handoff() -> None:
+def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:
     app = make_app_test().run()
 
     app.chat_input[0].set_value("00000000000").run()
@@ -39,8 +39,12 @@ def test_streamlit_app_masks_identity_and_blocks_after_handoff() -> None:
     app.chat_input[0].set_value("Quero consultar meu limite").run()
 
     assert not app.exception
-    assert app.chat_input[0].disabled is True
-    assert "Crédito" in app.info[0].value
+    assert app.chat_input[0].disabled is False
+
+    app.chat_input[0].set_value("consultar limite atual").run()
+
+    assert not app.exception
+    assert "R$ 2.500,00" in app.chat_message[-1].markdown[0].value
 
 
 def test_streamlit_app_can_start_new_conversation_after_end() -> None:
@@ -55,3 +59,16 @@ def test_streamlit_app_can_start_new_conversation_after_end() -> None:
     assert not app.exception
     assert app.chat_input[0].disabled is False
     assert len(app.chat_message) == 1
+
+
+def test_streamlit_app_hides_unavailable_internal_agent_name() -> None:
+    app = make_app_test().run()
+    app.chat_input[0].set_value("00000000000").run()
+    app.chat_input[0].set_value("20/05/1990").run()
+
+    app.chat_input[0].set_value("cotação do dólar").run()
+
+    assert not app.exception
+    assert app.chat_input[0].disabled is True
+    assert "Câmbio" not in app.info[0].value
+    assert "próximo módulo" in app.info[0].value

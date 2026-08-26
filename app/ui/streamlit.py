@@ -30,7 +30,7 @@ def render_app() -> None:
 
     with st.sidebar:
         st.subheader("Sessão")
-        st.write(f"Agente ativo: **{_agent_label(state['active_agent'])}**")
+        st.write("Canal: **Atendimento**")
         st.write(f"Tentativas de autenticação: **{state['authentication_attempts']}/3**")
         if application.uses_ephemeral_audit_key:
             st.warning(
@@ -45,14 +45,12 @@ def render_app() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    can_receive_message = state["end_reason"] is None and state["active_agent"] == "triage"
+    available_agents: set[AgentName] = {"triage", "credit"}
+    can_receive_message = state["end_reason"] is None and state["active_agent"] in available_agents
     if state["end_reason"] is not None:
         st.success("Conversa finalizada. Inicie uma nova conversa para continuar.")
-    elif state["active_agent"] != "triage":
-        st.info(
-            f"Triagem concluída. O módulo de {_agent_label(state['active_agent'])} "
-            "será conectado na próxima sprint correspondente."
-        )
+    elif state["active_agent"] not in available_agents:
+        st.info("Este atendimento continuará assim que o próximo módulo estiver disponível.")
 
     user_message = st.chat_input(
         "Digite sua mensagem",
@@ -89,13 +87,3 @@ def _reset_conversation(application: Application) -> None:
     state = application.workflow.start()
     st.session_state[_STATE_KEY] = state
     st.session_state[_MESSAGES_KEY] = [{"role": "assistant", "content": state["assistant_message"]}]
-
-
-def _agent_label(agent: AgentName) -> str:
-    labels: dict[AgentName, str] = {
-        "triage": "Triagem",
-        "credit": "Crédito",
-        "interview": "Entrevista de Crédito",
-        "exchange": "Câmbio",
-    }
-    return labels[agent]

@@ -17,6 +17,8 @@ class ConfigurationError(RuntimeError):
 class Settings:
     project_root: Path
     customer_file: Path
+    score_policy_file: Path
+    credit_request_file: Path
     audit_file: Path
     pseudonymization_key: bytes
     uses_ephemeral_audit_key: bool
@@ -46,6 +48,8 @@ def load_settings(
     return Settings(
         project_root=resolved_root,
         customer_file=resolved_root / "data" / "clientes.csv",
+        score_policy_file=resolved_root / "data" / "score_limite.csv",
+        credit_request_file=resolved_root / "data" / "solicitacoes_aumento_limite.csv",
         audit_file=resolved_root / "data" / "audit_events.jsonl",
         pseudonymization_key=pseudonymization_key,
         uses_ephemeral_audit_key=uses_ephemeral_key,

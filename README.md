@@ -2,15 +2,14 @@
 
 [![CI](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
-![Status](https://img.shields.io/badge/status-em%20desenvolvimento-orange)
+![Status](https://img.shields.io/badge/status-MVP%20completo-brightgreen)
 
-Sistema de atendimento bancário conversacional composto por agentes especializados. O
-projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza regras de
-negócio determinísticas, separação de responsabilidades, testes automatizados,
-rastreabilidade e proteção de dados pessoais.
+MVP de atendimento bancário conversacional com quatro agentes especializados, interface
+Streamlit e orquestração por LangGraph. A solução cobre o fluxo completo do desafio técnico
+da Tech For Humans: autenticação, crédito, entrevista financeira, reanálise e câmbio.
 
-> **Status atual:** os quatro agentes do desafio, orquestração e interface Streamlit estão
-> concluídos e cobertos por testes automatizados.
+> **Entrega completa:** 242 testes, 100% de linhas e branches cobertos, MyPy strict, Ruff,
+> CI, auditoria pseudonimizada e container não-root com health check.
 
 ## Visão Geral do Projeto
 
@@ -26,6 +25,17 @@ atendimento é dividido entre quatro agentes com escopos bem definidos:
 
 O usuário pode solicitar o encerramento a qualquer momento. As transições entre agentes
 são implícitas, preservando a experiência de uma conversa única.
+
+### Fluxos demonstráveis
+
+| Fluxo | Resultado |
+| --- | --- |
+| Autenticação | Valida CPF e nascimento no `clientes.csv`, com até três tentativas. |
+| Consulta de crédito | Exibe o limite atual somente após autenticação. |
+| Aumento de limite | Registra o pedido e aplica a política do `score_limite.csv`. |
+| Entrevista financeira | Recalcula o score, atualiza o cliente e reanalisa o pedido original. |
+| Câmbio | Consulta a AwesomeAPI e retorna a cotação atual pela mesma interface. |
+| Encerramento | Finaliza qualquer etapa e remove dados pessoais e financeiros do estado. |
 
 ## Arquitetura do Sistema
 
@@ -85,53 +95,17 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 
 ## Funcionalidades Implementadas
 
-### Concluídas
-
-- [x] Estado conversacional tipado e inicialização segura.
-- [x] Identificador único por conversa.
-- [x] Modelo imutável de eventos de auditoria.
-- [x] Pseudonimização de referência do titular com HMAC-SHA-256.
-- [x] Persistência local de auditoria em JSONL com acesso restrito.
-- [x] Testes automatizados e cobertura mínima obrigatória de 95%.
-- [x] CI com formatação, lint, tipagem e testes.
-- [x] Dependabot para dependências Python/uv e GitHub Actions.
-- [x] Validação de CPF e data de nascimento em `clientes.csv`.
-- [x] Controle de até três tentativas consecutivas de autenticação.
-- [x] Identificação determinística de intenção após autenticação.
-- [x] Tratamento controlado de arquivo ausente, esquema inválido e registro duplicado.
-- [x] Encerramento durante a Triagem com remoção dos dados pessoais do estado.
-- [x] Orquestração dos turnos da Triagem com LangGraph.
-- [x] Interface Streamlit com histórico sensível mascarado.
-- [x] Composição explícita entre configurações, repositórios, auditoria, agente e grafo.
-- [x] Consulta de limite após autenticação.
-- [x] Solicitação de aumento com valores monetários tratados por `Decimal`.
-- [x] Política determinística carregada de `score_limite.csv`.
-- [x] Registro final em `solicitacoes_aumento_limite.csv` com timestamp UTC ISO 8601.
-- [x] Atualização atômica do limite aprovado e rollback controlado em falha de registro.
-- [x] Auditoria da decisão sem CPF, score ou valores financeiros.
-- [x] Oferta e handoff para entrevista após rejeição.
-- [x] Encerramento global, inclusive após handoff para Crédito.
-- [x] Entrevista estruturada com renda, emprego, despesas, dependentes e dívidas.
-- [x] Fórmula de score determinística, versionada e limitada ao intervalo de 0 a 1000.
-- [x] Atualização atômica do score em `clientes.csv` com compensação em falha de auditoria.
-- [x] Remoção dos dados financeiros do estado ao concluir ou encerrar a conversa.
-- [x] Reanálise automática do limite originalmente rejeitado após a entrevista.
-- [x] Mascaramento das respostas financeiras no histórico da interface.
-- [x] Cotação atual de USD, EUR, ARS, GBP e JPY via AwesomeAPI.
-- [x] Timeout de 5 segundos e repetição limitada a falhas de transporte.
-- [x] Tratamento seguro de indisponibilidade, HTTP não exitoso e payload inválido da API.
-- [x] Auditoria mínima da consulta de câmbio sem payload, moeda ou dados pessoais brutos.
-
-### Roadmap do desafio
-
-- [x] Núcleo do Agente de Triagem e autenticação com até três tentativas.
-- [x] Roteamento autenticado e encerramento global.
-- [x] Agente de Crédito e consulta de limite.
-- [x] Solicitação e decisão de aumento de limite.
-- [x] Agente de Entrevista e recálculo de score entre 0 e 1000.
-- [x] Agente de Câmbio com API externa e tratamento de indisponibilidade.
-- [x] Interface conversacional inicial com Streamlit.
-- [x] Testes de integração dos fluxos de crédito, entrevista e câmbio.
+| Capacidade | Implementação |
+| --- | --- |
+| Identidade | CPF + nascimento, três tentativas, dados fictícios e falhas controladas. |
+| Crédito | Consulta, aumento, decisão determinística, persistência e rollback. |
+| Entrevista | Cinco perguntas, score versionado entre 0–1000 e compensação em falha. |
+| Câmbio | USD, EUR, ARS, GBP e JPY; timeout, retry de transporte e payload validado. |
+| Orquestração | LangGraph, estado tipado, escopos isolados e handoffs invisíveis. |
+| Interface | Streamlit cobrindo os quatro agentes e mascarando entradas sensíveis. |
+| Auditoria | JSONL mínimo, motivos controlados e referência HMAC-SHA-256. |
+| Qualidade | Pytest, cobertura integral, Ruff, MyPy strict, CI e Dependabot. |
+| Entrega | Execução local ou Docker não-root com health check verificado na CI. |
 
 ## Estrutura do Código
 
@@ -148,9 +122,6 @@ tests/               # Testes unitários e de integração
 docs/                # Decisões de arquitetura, privacidade e operação
 ```
 
-Os diretórios marcados como planejados serão criados apenas quando sua primeira
-responsabilidade for implementada, evitando módulos vazios e abstrações prematuras.
-
 ## Desafios Enfrentados e Como Foram Resolvidos
 
 ### Rastreabilidade sem expor dados pessoais
@@ -162,9 +133,9 @@ armazenada no Git.
 
 ### Decisões de crédito explicáveis
 
-Uma LLM não será responsável por aprovar crédito ou calcular score. As decisões serão
-determinísticas e registrarão `reason_code` e `policy_version`, permitindo reprodução,
-teste e revisão.
+Uma LLM não participa da autenticação, aprovação de crédito ou cálculo de score. Essas
+decisões são determinísticas e registram `reason_code` e `policy_version`, permitindo
+reprodução, teste e revisão.
 
 ### Confiabilidade desde o início
 
@@ -194,11 +165,12 @@ somente USD, EUR, ARS, GBP e JPY, aplica timeout de cinco segundos e faz uma ún
 para falhas de transporte. Respostas HTTP não exitosas, payloads inválidos e indisponibilidade
 retornam uma mensagem controlada, sem expor detalhes técnicos ou o conteúdo da resposta.
 
-### Estado atual versus arquitetura final
+### Limite claro entre MVP e produção
 
-O README diferencia funcionalidades concluídas de itens planejados. Isso mantém a
-documentação honesta durante o desenvolvimento incremental e evita afirmar que um agente
-está pronto antes de seus testes.
+CSV e JSONL são proporcionais ao desafio e tornam a demonstração reproduzível. Eles não
+simulam garantias inexistentes: uma implantação bancária real exigiria banco transacional,
+auditoria centralizada e imutável, gestão de segredos, autorização, rate limiting,
+observabilidade, retenção formal e procedimentos operacionais.
 
 ## Escolhas Técnicas e Justificativas
 
@@ -217,8 +189,10 @@ está pronto antes de seus testes.
 | GitHub Actions | Executa os mesmos controles em toda PR e na branch principal. |
 | Docker não-root | Empacota a demonstração sem executar a aplicação como administrador. |
 
-A LLM será usada apenas onde a linguagem natural for útil, como identificação ambígua de
-intenção e formulação de respostas. Regras críticas continuarão fora do modelo.
+O MVP não depende de uma LLM. A interpretação necessária é deliberadamente determinística,
+adequada ao vocabulário fechado do desafio e executável sem credenciais pagas. Uma LLM
+poderia ser adicionada futuramente apenas para linguagem ambígua ou formulação de respostas,
+sempre com fallback determinístico e sem participar das regras críticas.
 
 ## Tutorial de Execução e Testes
 

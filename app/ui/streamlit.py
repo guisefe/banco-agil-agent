@@ -3,7 +3,7 @@ from typing import Literal, TypedDict, cast
 import streamlit as st
 
 from app.bootstrap import Application, build_application
-from app.models.conversation import AgentName, ConversationState
+from app.models.conversation import ConversationState
 from app.ui.privacy import safe_user_message_for_display
 
 _APPLICATION_KEY = "application"
@@ -45,12 +45,9 @@ def render_app() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    available_agents: set[AgentName] = {"triage", "credit", "interview"}
-    can_receive_message = state["end_reason"] is None and state["active_agent"] in available_agents
+    can_receive_message = state["end_reason"] is None
     if state["end_reason"] is not None:
         st.success("Conversa finalizada. Inicie uma nova conversa para continuar.")
-    elif state["active_agent"] not in available_agents:
-        st.info("Este atendimento continuará assim que o próximo módulo estiver disponível.")
 
     user_message = st.chat_input(
         "Digite sua mensagem",

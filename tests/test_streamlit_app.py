@@ -1,7 +1,12 @@
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
+
+from app.models.exchange import ExchangeQuote
+from app.repositories.exchange import AwesomeApiExchangeRateRepository
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -61,7 +66,22 @@ def test_streamlit_app_can_start_new_conversation_after_end() -> None:
     assert len(app.chat_message) == 1
 
 
-def test_streamlit_app_hides_unavailable_internal_agent_name() -> None:
+def test_streamlit_app_completes_exchange_quote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def get_quote(
+        repository: AwesomeApiExchangeRateRepository,
+        *,
+        currency: str,
+    ) -> ExchangeQuote:
+        return ExchangeQuote(
+            currency=currency,
+            buy_rate=Decimal("5.1234"),
+            sell_rate=Decimal("5.1334"),
+            quoted_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+        )
+
+    monkeypatch.setattr(AwesomeApiExchangeRateRepository, "get_brl_quote", get_quote)
     app = make_app_test().run()
     app.chat_input[0].set_value("00000000000").run()
     app.chat_input[0].set_value("20/05/1990").run()
@@ -69,6 +89,11 @@ def test_streamlit_app_hides_unavailable_internal_agent_name() -> None:
     app.chat_input[0].set_value("cotação do dólar").run()
 
     assert not app.exception
-    assert app.chat_input[0].disabled is True
-    assert "Câmbio" not in app.info[0].value
-    assert "próximo módulo" in app.info[0].value
+    assert app.chat_input[0].disabled is False
+
+    app.chat_input[0].set_value("USD").run()
+
+    assert not app.exception
+    assert "Cotação de USD" in app.chat_message[-1].markdown[0].value
+    assert app.chat_input[0].disabled is False
+    assert not app.info

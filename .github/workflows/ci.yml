@@ -43,7 +43,45 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check
-        run: uv run mypy app
+        run: uv run mypy app tests
 
       - name: Run tests
         run: uv run pytest
+
+  container:
+    name: Container build and health
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --tag banco-agil-agent:ci .
+
+      - name: Start container
+        run: docker run --detach --name banco-agil-agent banco-agil-agent:ci
+
+      - name: Wait for healthy container
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            status="$(docker inspect --format='{{.State.Health.Status}}' banco-agil-agent)"
+            if [[ "$status" == "healthy" ]]; then
+              exit 0
+            fi
+            if [[ "$status" == "unhealthy" ]]; then
+              docker logs banco-agil-agent
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs banco-agil-agent
+          exit 1
+
+      - name: Stop container
+        if: always()
+        run: docker rm --force banco-agil-agent

@@ -6,7 +6,7 @@
 
 - [ ] `uv run ruff format --check .`
 - [ ] `uv run ruff check .`
-- [ ] `uv run mypy app`
+- [ ] `uv run mypy app tests`
 - [ ] `uv run pytest`
 
 ## Privacy and security

@@ -215,6 +215,7 @@ está pronto antes de seus testes.
 | Auditoria estruturada | Oferece rastreabilidade sem armazenar o conteúdo completo da conversa. |
 | Pytest, Ruff e MyPy | Automatizam testes, padronização e verificação estática. |
 | GitHub Actions | Executa os mesmos controles em toda PR e na branch principal. |
+| Docker não-root | Empacota a demonstração sem executar a aplicação como administrador. |
 
 A LLM será usada apenas onde a linguagem natural for útil, como identificação ambígua de
 intenção e formulação de respostas. Regras críticas continuarão fora do modelo.
@@ -255,12 +256,27 @@ export EXCHANGE_API_KEY="sua-chave-opcional"
 ```bash
 uv run ruff format --check .
 uv run ruff check .
-uv run mypy app
+uv run mypy app tests
 uv run pytest
 ```
 
 O `pytest` mede a cobertura do pacote `app` e falha quando o total fica abaixo de 95%.
 Esses mesmos comandos são executados automaticamente pelo GitHub Actions.
+
+### Executar com Docker
+
+O container executa o mesmo aplicativo Streamlit com usuário sem privilégios e possui
+health check no endpoint nativo do Streamlit:
+
+```bash
+docker build -t banco-agil-agent .
+docker run --rm -p 8501:8501 \
+  -e AUDIT_PSEUDONYMIZATION_KEY="substitua-por-um-segredo-com-32-bytes-ou-mais" \
+  banco-agil-agent
+```
+
+Acesse `http://localhost:8501`. A CI constrói a imagem e aguarda o container ficar
+saudável antes de permitir a integração.
 
 ### Executar a aplicação
 

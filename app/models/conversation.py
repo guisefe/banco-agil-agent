@@ -32,6 +32,8 @@ InterviewStage = Literal[
     "awaiting_debts",
 ]
 
+ExchangeStage = Literal["awaiting_currency"]
+
 EndReason = Literal[
     "user_requested",
     "authentication_attempts_exceeded",
@@ -62,6 +64,7 @@ class ConversationState(TypedDict):
     fixed_expenses: Decimal | None
     dependents: int | None
     has_active_debts: bool | None
+    exchange_stage: ExchangeStage
 
     end_reason: EndReason | None
 
@@ -87,5 +90,6 @@ def initial_state() -> ConversationState:
         "fixed_expenses": None,
         "dependents": None,
         "has_active_debts": None,
+        "exchange_stage": "awaiting_currency",
         "end_reason": None,
     }

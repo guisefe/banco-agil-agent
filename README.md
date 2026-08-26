@@ -9,9 +9,8 @@ projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza r
 negócio determinísticas, separação de responsabilidades, testes automatizados,
 rastreabilidade e proteção de dados pessoais.
 
-> **Status atual:** fundação, Triagem, Crédito, Entrevista de Crédito, orquestração e
-> interface Streamlit concluídos. O Agente de Câmbio será conectado na próxima etapa e só
-> será marcado como concluído após testes automatizados.
+> **Status atual:** os quatro agentes do desafio, orquestração e interface Streamlit estão
+> concluídos e cobertos por testes automatizados.
 
 ## Visão Geral do Projeto
 
@@ -54,8 +53,8 @@ flowchart TD
 - **Orquestração:** um grafo de estados controla turnos, autenticação, handoffs e
   encerramento.
 - **Agentes:** cada agente executa apenas ações pertencentes ao seu escopo.
-- **Ferramentas:** autenticação, leitura e escrita de CSV, cálculo de score e encerramento
-  são funções explícitas e testáveis; a consulta de câmbio permanece planejada.
+- **Ferramentas:** autenticação, leitura e escrita de CSV, cálculo de score, consulta de
+  câmbio e encerramento são funções explícitas e testáveis.
 - **Auditoria:** eventos de negócio são registrados separadamente das mensagens e dos
   dados financeiros.
 
@@ -118,6 +117,10 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Remoção dos dados financeiros do estado ao concluir ou encerrar a conversa.
 - [x] Reanálise automática do limite originalmente rejeitado após a entrevista.
 - [x] Mascaramento das respostas financeiras no histórico da interface.
+- [x] Cotação atual de USD, EUR, ARS, GBP e JPY via AwesomeAPI.
+- [x] Timeout de 5 segundos e repetição limitada a falhas de transporte.
+- [x] Tratamento seguro de indisponibilidade, HTTP não exitoso e payload inválido da API.
+- [x] Auditoria mínima da consulta de câmbio sem payload, moeda ou dados pessoais brutos.
 
 ### Roadmap do desafio
 
@@ -126,9 +129,9 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Agente de Crédito e consulta de limite.
 - [x] Solicitação e decisão de aumento de limite.
 - [x] Agente de Entrevista e recálculo de score entre 0 e 1000.
-- [ ] Agente de Câmbio com API externa e tratamento de indisponibilidade.
+- [x] Agente de Câmbio com API externa e tratamento de indisponibilidade.
 - [x] Interface conversacional inicial com Streamlit.
-- [ ] Testes de integração do atendimento completo.
+- [x] Testes de integração dos fluxos de crédito, entrevista e câmbio.
 
 ## Estrutura do Código
 
@@ -184,6 +187,13 @@ arredondamento `ROUND_HALF_UP`. O resultado é limitado entre 0 e 1000 antes de 
 Se a auditoria crítica do novo score falhar, o repositório restaura o score anterior; uma
 falha posterior apenas no evento de handoff não desfaz uma atualização já confirmada.
 
+### Integração externa resiliente
+
+O agente de Câmbio usa a AwesomeAPI por meio de um adaptador isolado. O adaptador aceita
+somente USD, EUR, ARS, GBP e JPY, aplica timeout de cinco segundos e faz uma única repetição
+para falhas de transporte. Respostas HTTP não exitosas, payloads inválidos e indisponibilidade
+retornam uma mensagem controlada, sem expor detalhes técnicos ou o conteúdo da resposta.
+
 ### Estado atual versus arquitetura final
 
 O README diferencia funcionalidades concluídas de itens planejados. Isso mantém a
@@ -196,6 +206,7 @@ está pronto antes de seus testes.
 | --- | --- |
 | Python 3.12 | Tipagem moderna, ecossistema de IA e compatibilidade com o desafio. |
 | `uv` | Instalação rápida e ambiente reproduzível por meio de `uv.lock`. |
+| `httpx` | Cliente HTTP com timeout explícito e transporte simulável nos testes. |
 | Estado tipado | Torna transições explícitas e reduz erros entre agentes. |
 | Regras determinísticas | Garante autenticação, score e crédito reproduzíveis e testáveis. |
 | Grafo de estados | Representa os handoffs e impede que agentes atuem fora do escopo. |
@@ -232,6 +243,13 @@ por processo:
 export AUDIT_PSEUDONYMIZATION_KEY="substitua-por-um-segredo-com-32-bytes-ou-mais"
 ```
 
+Opcionalmente, configure uma chave da AwesomeAPI fora do Git. A demonstração funciona sem
+ela quando o provedor permite a consulta pública:
+
+```bash
+export EXCHANGE_API_KEY="sua-chave-opcional"
+```
+
 ### Testes e qualidade
 
 ```bash
@@ -260,8 +278,9 @@ Use um dos clientes fictícios para testar a Triagem:
 Depois da autenticação, escolha crédito e consulte o limite ou solicite um aumento. Para o
 cliente com score 650, `R$ 5.000,00` é aprovado e um valor superior oferece a entrevista.
 Responda às cinco perguntas; ao final, o score é atualizado e o mesmo limite é reanalisado
-automaticamente. O módulo de câmbio ainda bloqueia novas mensagens sem revelar a transição
-interna. Nenhuma chave real deve ser adicionada ao repositório.
+automaticamente. Para câmbio, peça a cotação de dólar, euro, peso argentino, libra ou iene;
+após a resposta, o atendimento retorna naturalmente ao menu. Nenhuma chave real deve ser
+adicionada ao repositório.
 
 ## Segurança e Privacidade
 

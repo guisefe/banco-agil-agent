@@ -17,10 +17,6 @@ GraphRoute = Literal["triage", "credit", "interview", "exchange"]
 InterviewRoute = Literal["credit_reanalysis", "end"]
 
 
-class AgentUnavailableError(RuntimeError):
-    """Raised when the active agent has not been implemented yet."""
-
-
 class ConversationWorkflow:
     def __init__(
         self,

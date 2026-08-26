@@ -15,6 +15,8 @@ def test_settings_use_ephemeral_key_when_environment_is_missing(tmp_path: Path) 
     assert settings.uses_ephemeral_audit_key is True
     assert len(settings.pseudonymization_key) == 32
     assert settings.customer_file == tmp_path / "data" / "clientes.csv"
+    assert settings.score_policy_file == tmp_path / "data" / "score_limite.csv"
+    assert settings.credit_request_file == tmp_path / "data" / "solicitacoes_aumento_limite.csv"
     assert settings.audit_file == tmp_path / "data" / "audit_events.jsonl"
 
 

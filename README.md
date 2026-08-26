@@ -9,9 +9,9 @@ projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza r
 negócio determinísticas, separação de responsabilidades, testes automatizados,
 rastreabilidade e proteção de dados pessoais.
 
-> **Status atual:** fundação, núcleo determinístico da Triagem, orquestração inicial e
-> interface Streamlit concluídos. Os agentes de destino serão conectados incrementalmente
-> e só serão marcados como concluídos após testes automatizados.
+> **Status atual:** fundação, Triagem, orquestração, interface Streamlit e Agente de
+> Crédito concluídos. Entrevista de Crédito e Câmbio serão conectados incrementalmente e
+> só serão marcados como concluídos após testes automatizados.
 
 ## Visão Geral do Projeto
 
@@ -50,7 +50,7 @@ flowchart TD
 
 ### Componentes
 
-- **Interface:** Streamlit oferecerá o chat usado para simular o atendimento completo.
+- **Interface:** Streamlit oferece o chat usado para simular o atendimento incremental.
 - **Orquestração:** um grafo de estados controlará turnos, autenticação, handoffs e
   encerramento.
 - **Agentes:** cada agente poderá executar apenas ações pertencentes ao seu escopo.
@@ -104,13 +104,21 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Orquestração dos turnos da Triagem com LangGraph.
 - [x] Interface Streamlit com histórico sensível mascarado.
 - [x] Composição explícita entre configurações, repositórios, auditoria, agente e grafo.
+- [x] Consulta de limite após autenticação.
+- [x] Solicitação de aumento com valores monetários tratados por `Decimal`.
+- [x] Política determinística carregada de `score_limite.csv`.
+- [x] Registro final em `solicitacoes_aumento_limite.csv` com timestamp UTC ISO 8601.
+- [x] Atualização atômica do limite aprovado e rollback controlado em falha de registro.
+- [x] Auditoria da decisão sem CPF, score ou valores financeiros.
+- [x] Oferta e handoff para entrevista após rejeição.
+- [x] Encerramento global, inclusive após handoff para Crédito.
 
 ### Roadmap do desafio
 
 - [x] Núcleo do Agente de Triagem e autenticação com até três tentativas.
-- [ ] Roteamento autenticado e encerramento global.
-- [ ] Agente de Crédito e consulta de limite.
-- [ ] Solicitação e decisão de aumento de limite.
+- [x] Roteamento autenticado e encerramento global.
+- [x] Agente de Crédito e consulta de limite.
+- [x] Solicitação e decisão de aumento de limite.
 - [ ] Agente de Entrevista e recálculo de score entre 0 e 1000.
 - [ ] Agente de Câmbio com API externa e tratamento de indisponibilidade.
 - [x] Interface conversacional inicial com Streamlit.
@@ -123,8 +131,9 @@ app/
 ├── agents/          # Comportamento e escopo de cada agente
 ├── audit/           # Eventos, pseudonimização e persistência de auditoria
 ├── models/          # Estado e tipos compartilhados da conversa
-├── tools/           # Identidade e encerramento; score e câmbio entram nas próximas sprints
-├── graph/           # Orquestração e roteamento incremental entre agentes
+├── repositories/    # Clientes, política de score e solicitações em CSV
+├── tools/           # Identidade, valores monetários e encerramento
+├── graph/           # Orquestração e roteamento entre agentes disponíveis
 └── ui/              # Interface Streamlit e proteção de dados exibidos
 tests/               # Testes unitários e de integração
 docs/                # Decisões de arquitetura, privacidade e operação
@@ -153,6 +162,14 @@ teste e revisão.
 O limite mínimo de cobertura inicialmente falhava porque ainda não havia testes. Foram
 adicionados testes unitários para estado e auditoria, além de um pipeline que impede a
 integração de código sem formatação, lint, tipagem e testes aprovados.
+
+### Consistência entre pedido e limite aprovado
+
+Os CSVs exigidos não oferecem transações entre arquivos. No MVP de processo único, a
+decisão completa é serializada para sempre validar o pedido contra o limite mais recente.
+A atualização do cliente usa substituição atômica e o caso de falha ao registrar uma
+aprovação restaura o limite anterior. Em produção, os dois registros pertenceriam à mesma
+transação em um banco de dados e teriam chave de idempotência.
 
 ### Estado atual versus arquitetura final
 
@@ -227,9 +244,10 @@ Use um dos clientes fictícios para testar a Triagem:
 | `000.000.000-00` | `20/05/1990` |
 | `111.111.111-11` | `03/11/1985` |
 
-Depois da autenticação, solicite crédito, entrevista ou cotação. Nesta etapa, a UI conclui
-o handoff e bloqueia novas mensagens até o agente de destino ser implementado. Nenhuma
-chave real deve ser adicionada ao repositório.
+Depois da autenticação, escolha crédito e consulte o limite ou solicite um aumento. Para o
+cliente com score 650, `R$ 5.000,00` é aprovado e um valor superior é rejeitado, oferecendo
+o handoff para a entrevista. Os módulos ainda indisponíveis bloqueiam novas mensagens sem
+revelar a transição interna. Nenhuma chave real deve ser adicionada ao repositório.
 
 ## Segurança e Privacidade
 

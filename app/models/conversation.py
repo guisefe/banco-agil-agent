@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Literal, TypedDict
 from uuid import uuid4
 
@@ -13,6 +14,12 @@ TriageStage = Literal[
     "awaiting_cpf",
     "awaiting_birth_date",
     "awaiting_intent",
+]
+
+CreditStage = Literal[
+    "awaiting_action",
+    "awaiting_requested_limit",
+    "offering_interview",
 ]
 
 EndReason = Literal[
@@ -37,6 +44,8 @@ class ConversationState(TypedDict):
 
     active_agent: AgentName
     triage_stage: TriageStage
+    credit_stage: CreditStage
+    requested_credit_limit: Decimal | None
 
     end_reason: EndReason | None
 
@@ -54,5 +63,7 @@ def initial_state() -> ConversationState:
         "authentication_attempts": 0,
         "active_agent": "triage",
         "triage_stage": "greeting",
+        "credit_stage": "awaiting_action",
+        "requested_credit_limit": None,
         "end_reason": None,
     }

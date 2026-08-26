@@ -1,10 +1,17 @@
-from typing import cast
+from typing import Literal, cast
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from app.agents.credit import CreditAgent
 from app.agents.triage import TriageAgent
+from app.audit.events import AuditEvent
+from app.audit.privacy import pseudonymize_subject
+from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState, initial_state
+from app.tools.conversation import end_conversation, is_end_request
+
+GraphRoute = Literal["triage", "credit"]
 
 
 class AgentUnavailableError(RuntimeError):
@@ -12,8 +19,18 @@ class AgentUnavailableError(RuntimeError):
 
 
 class ConversationWorkflow:
-    def __init__(self, *, triage_agent: TriageAgent) -> None:
+    def __init__(
+        self,
+        *,
+        triage_agent: TriageAgent,
+        credit_agent: CreditAgent,
+        audit_writer: AuditWriter,
+        pseudonymization_key: bytes,
+    ) -> None:
         self._triage_agent = triage_agent
+        self._credit_agent = credit_agent
+        self._audit_writer = audit_writer
+        self._pseudonymization_key = pseudonymization_key
         builder: StateGraph[
             ConversationState,
             None,
@@ -25,8 +42,14 @@ class ConversationWorkflow:
             output_schema=ConversationState,
         )
         builder.add_node("triage", self._run_triage)
-        builder.add_edge(START, "triage")
+        builder.add_node("credit", self._run_credit)
+        builder.add_conditional_edges(
+            START,
+            self._route,
+            {"triage": "triage", "credit": "credit"},
+        )
         builder.add_edge("triage", END)
+        builder.add_edge("credit", END)
         self._graph: CompiledStateGraph[
             ConversationState,
             None,
@@ -44,7 +67,9 @@ class ConversationWorkflow:
     ) -> ConversationState:
         if state["end_reason"] is not None:
             raise ValueError("conversation has already ended")
-        if state["active_agent"] != "triage":
+        if is_end_request(user_message):
+            return self._end_by_user_request(state, user_message)
+        if state["active_agent"] not in {"triage", "credit"}:
             raise AgentUnavailableError(
                 f"agent '{state['active_agent']}' is not available in this sprint"
             )
@@ -57,6 +82,48 @@ class ConversationWorkflow:
         if state["triage_stage"] == "greeting":
             return self._triage_agent.start(state)
         return self._triage_agent.respond(state, state["user_message"])
+
+    def _run_credit(self, state: ConversationState) -> ConversationState:
+        return self._credit_agent.respond(state, state["user_message"])
+
+    @staticmethod
+    def _route(state: ConversationState) -> GraphRoute:
+        if state["active_agent"] == "credit":
+            return "credit"
+        return "triage"
+
+    def _end_by_user_request(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
+        next_state = state.copy()
+        next_state["turn_number"] += 1
+        next_state["user_message"] = user_message
+        cpf = next_state["cpf"]
+        subject_ref = (
+            pseudonymize_subject(cpf, key=self._pseudonymization_key) if cpf is not None else None
+        )
+        ended_state = end_conversation(
+            next_state,
+            reason="user_requested",
+            assistant_message="Atendimento encerrado. Obrigado por falar com o Banco Ágil!",
+        )
+        try:
+            self._audit_writer.append(
+                AuditEvent(
+                    event_type="conversation_ended",
+                    conversation_id=state["conversation_id"],
+                    turn_number=next_state["turn_number"],
+                    agent=state["active_agent"],
+                    outcome="success",
+                    reason_code="USER_REQUESTED",
+                    subject_ref=subject_ref,
+                )
+            )
+        except AuditWriteError:
+            pass
+        return ended_state
 
     def _invoke(self, state: ConversationState) -> ConversationState:
         result = self._graph.invoke(state)

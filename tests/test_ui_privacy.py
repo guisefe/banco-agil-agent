@@ -19,3 +19,19 @@ def test_ui_preserves_regular_and_end_messages() -> None:
 
     state["triage_stage"] = "awaiting_cpf"
     assert safe_user_message_for_display(state, "encerrar") == "encerrar"
+
+
+def test_ui_masks_each_financial_interview_answer() -> None:
+    state = initial_state()
+    state["active_agent"] = "interview"
+    expected_labels = {
+        "awaiting_income": "Renda mensal informada.",
+        "awaiting_employment": "Tipo de emprego informado.",
+        "awaiting_expenses": "Despesas fixas informadas.",
+        "awaiting_dependents": "Número de dependentes informado.",
+        "awaiting_debts": "Situação de dívidas informada.",
+    }
+
+    for stage, label in expected_labels.items():
+        state["interview_stage"] = stage  # type: ignore[typeddict-item]
+        assert safe_user_message_for_display(state, "sensitive value") == label

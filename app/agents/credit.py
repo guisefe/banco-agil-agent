@@ -63,6 +63,16 @@ class CreditAgent:
             return self._handle_interview_offer(next_state, user_message)
         raise ValueError("credit agent is not ready to receive a user message")
 
+    def reanalyze_pending_request(self, state: ConversationState) -> ConversationState:
+        self._ensure_credit_can_respond(state)
+        requested_limit = state["requested_credit_limit"]
+        if requested_limit is None:
+            raise ValueError("credit reanalysis requires a pending requested limit")
+        next_state = state.copy()
+        next_state["credit_stage"] = "awaiting_requested_limit"
+        with _CREDIT_DECISION_LOCK:
+            return self._decide_request(next_state, requested_limit, reanalysis=True)
+
     def _choose_action(
         self,
         state: ConversationState,
@@ -108,12 +118,25 @@ class CreditAgent:
         self,
         state: ConversationState,
         requested_limit: Decimal,
+        *,
+        reanalysis: bool = False,
     ) -> ConversationState:
 
         customer = self._load_customer(state)
         if customer is None:
             return self._repository_failure(state)
         if requested_limit <= customer.credit_limit:
+            if reanalysis:
+                state["requested_credit_limit"] = None
+                state["assistant_message"] = (
+                    f"Seu limite atual de {format_brl(customer.credit_limit)} "
+                    "já atende ao valor solicitado. Posso ajudar com outro assunto?"
+                )
+                return self._return_to_triage(
+                    state,
+                    reason_code="CREDIT_REANALYSIS_ALREADY_SATISFIED",
+                    tolerate_audit_failure=True,
+                )
             state["assistant_message"] = (
                 f"O novo limite deve ser maior que o atual, de {format_brl(customer.credit_limit)}."
             )
@@ -149,7 +172,21 @@ class CreditAgent:
             )
             return self._return_to_triage(
                 state,
-                reason_code="CREDIT_REQUEST_APPROVED",
+                reason_code=(
+                    "CREDIT_REANALYSIS_APPROVED" if reanalysis else "CREDIT_REQUEST_APPROVED"
+                ),
+                tolerate_audit_failure=True,
+            )
+
+        if reanalysis:
+            state["requested_credit_limit"] = None
+            state["assistant_message"] = (
+                "Mesmo após o recálculo do score, o limite solicitado ainda não pôde ser "
+                "aprovado. Posso ajudar com outro assunto?"
+            )
+            return self._return_to_triage(
+                state,
+                reason_code="CREDIT_REANALYSIS_REJECTED",
                 tolerate_audit_failure=True,
             )
 
@@ -192,7 +229,9 @@ class CreditAgent:
             except AuditWriteError:
                 return self._repository_failure(state)
             state["active_agent"] = "interview"
-            state["assistant_message"] = "Certo. Vamos iniciar sua entrevista financeira."
+            state["assistant_message"] = (
+                "Certo. Vamos iniciar sua entrevista financeira. Qual é sua renda mensal?"
+            )
             return state
 
         state["requested_credit_limit"] = None

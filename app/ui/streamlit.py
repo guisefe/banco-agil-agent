@@ -45,7 +45,7 @@ def render_app() -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    available_agents: set[AgentName] = {"triage", "credit"}
+    available_agents: set[AgentName] = {"triage", "credit", "interview"}
     can_receive_message = state["end_reason"] is None and state["active_agent"] in available_agents
     if state["end_reason"] is not None:
         st.success("Conversa finalizada. Inicie uma nova conversa para continuar.")

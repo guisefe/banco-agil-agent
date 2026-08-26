@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.agents.credit import CreditAgent
+from app.agents.interview import CreditInterviewAgent
 from app.agents.triage import TriageAgent
 from app.audit.writer import JsonlAuditWriter
 from app.config import Settings, load_settings
@@ -31,10 +32,16 @@ def build_application(*, settings: Settings | None = None) -> Application:
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
     )
+    interview_agent = CreditInterviewAgent(
+        customer_repository=customer_repository,
+        audit_writer=audit_writer,
+        pseudonymization_key=resolved_settings.pseudonymization_key,
+    )
     return Application(
         workflow=ConversationWorkflow(
             triage_agent=triage_agent,
             credit_agent=credit_agent,
+            interview_agent=interview_agent,
             audit_writer=audit_writer,
             pseudonymization_key=resolved_settings.pseudonymization_key,
         ),

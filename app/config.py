@@ -7,6 +7,7 @@ from pathlib import Path
 from app.audit.privacy import MIN_PSEUDONYMIZATION_KEY_BYTES
 
 AUDIT_KEY_ENVIRONMENT_VARIABLE = "AUDIT_PSEUDONYMIZATION_KEY"
+EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE = "EXCHANGE_API_KEY"
 
 
 class ConfigurationError(RuntimeError):
@@ -20,6 +21,7 @@ class Settings:
     score_policy_file: Path
     credit_request_file: Path
     audit_file: Path
+    exchange_api_key: str | None
     pseudonymization_key: bytes
     uses_ephemeral_audit_key: bool
 
@@ -51,6 +53,7 @@ def load_settings(
         score_policy_file=resolved_root / "data" / "score_limite.csv",
         credit_request_file=resolved_root / "data" / "solicitacoes_aumento_limite.csv",
         audit_file=resolved_root / "data" / "audit_events.jsonl",
+        exchange_api_key=source_environment.get(EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE),
         pseudonymization_key=pseudonymization_key,
         uses_ephemeral_audit_key=uses_ephemeral_key,
     )

@@ -23,6 +23,7 @@ def test_bootstrap_connects_real_adapters_and_workflow(tmp_path: Path) -> None:
         score_policy_file=score_policy_file,
         credit_request_file=credit_request_file,
         audit_file=tmp_path / "audit.jsonl",
+        exchange_api_key=None,
         pseudonymization_key=b"test-only-pseudonymization-key-32-bytes",
         uses_ephemeral_audit_key=False,
     )

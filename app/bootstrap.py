@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.agents.credit import CreditAgent
+from app.agents.exchange import ExchangeAgent
 from app.agents.interview import CreditInterviewAgent
 from app.agents.triage import TriageAgent
 from app.audit.writer import JsonlAuditWriter
@@ -8,6 +9,7 @@ from app.config import Settings, load_settings
 from app.graph.workflow import ConversationWorkflow
 from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRepository
 from app.repositories.customers import CsvCustomerRepository
+from app.repositories.exchange import AwesomeApiExchangeRateRepository
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -37,11 +39,19 @@ def build_application(*, settings: Settings | None = None) -> Application:
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
     )
+    exchange_agent = ExchangeAgent(
+        exchange_repository=AwesomeApiExchangeRateRepository(
+            api_key=resolved_settings.exchange_api_key,
+        ),
+        audit_writer=audit_writer,
+        pseudonymization_key=resolved_settings.pseudonymization_key,
+    )
     return Application(
         workflow=ConversationWorkflow(
             triage_agent=triage_agent,
             credit_agent=credit_agent,
             interview_agent=interview_agent,
+            exchange_agent=exchange_agent,
             audit_writer=audit_writer,
             pseudonymization_key=resolved_settings.pseudonymization_key,
         ),

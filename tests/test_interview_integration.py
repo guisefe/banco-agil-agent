@@ -27,6 +27,7 @@ def build_test_application(tmp_path: Path) -> tuple[Application, Settings]:
         score_policy_file=score_policy_file,
         credit_request_file=tmp_path / "solicitacoes_aumento_limite.csv",
         audit_file=tmp_path / "audit.jsonl",
+        exchange_api_key=None,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
         uses_ephemeral_audit_key=False,
     )

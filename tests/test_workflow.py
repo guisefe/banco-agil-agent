@@ -1,16 +1,18 @@
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
 
 from app.agents.credit import CreditAgent
+from app.agents.exchange import ExchangeAgent
 from app.agents.interview import CreditInterviewAgent
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
-from app.graph.workflow import AgentUnavailableError, ConversationWorkflow
+from app.graph.workflow import ConversationWorkflow
 from app.models.credit import CreditRequest
 from app.models.customer import Customer
+from app.models.exchange import ExchangeQuote
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
 
@@ -69,6 +71,16 @@ class CreditRequestRepositoryStub:
         self.requests.append(request)
 
 
+class ExchangeRepositoryStub:
+    def get_brl_quote(self, *, currency: str) -> ExchangeQuote:
+        return ExchangeQuote(
+            currency=currency,
+            buy_rate=Decimal("5.1234"),
+            sell_rate=Decimal("5.1334"),
+            quoted_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+        )
+
+
 def make_workflow() -> ConversationWorkflow:
     audit_writer = RecordingAuditWriter()
     customer_repository = CustomerRepositoryStub()
@@ -89,10 +101,16 @@ def make_workflow() -> ConversationWorkflow:
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
     )
+    exchange_agent = ExchangeAgent(
+        exchange_repository=ExchangeRepositoryStub(),
+        audit_writer=audit_writer,
+        pseudonymization_key=PSEUDONYMIZATION_KEY,
+    )
     return ConversationWorkflow(
         triage_agent=triage_agent,
         credit_agent=credit_agent,
         interview_agent=interview_agent,
+        exchange_agent=exchange_agent,
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
     )
@@ -116,15 +134,17 @@ def test_workflow_runs_triage_turns_through_langgraph() -> None:
     assert "R$ 2.500,00" in state["assistant_message"]
 
 
-def test_workflow_rejects_unimplemented_destination_agent() -> None:
+def test_workflow_runs_exchange_quote_and_returns_to_triage() -> None:
     workflow = make_workflow()
     state = workflow.start()
     state = workflow.respond(state, "00000000000")
     state = workflow.respond(state, "20/05/1990")
     state = workflow.respond(state, "cotação do dólar")
 
-    with pytest.raises(AgentUnavailableError, match="exchange"):
-        workflow.respond(state, "USD")
+    state = workflow.respond(state, "USD")
+
+    assert state["active_agent"] == "triage"
+    assert "Cotação de USD" in state["assistant_message"]
 
 
 def test_workflow_runs_interview_and_reanalyzes_pending_limit() -> None:

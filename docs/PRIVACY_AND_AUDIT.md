@@ -14,6 +14,7 @@ The audit trail exists to reconstruct security-sensitive and business-relevant a
 - handoffs between agents;
 - credit decisions and the version of the deterministic policy used;
 - changes to the customer risk profile.
+- exchange quote requests, without API payloads or raw customer identifiers.
 
 Audit data must not be reused for advertising, model training, employee surveillance, or
 another incompatible purpose without a new assessment.
@@ -25,8 +26,8 @@ event type, controlled outcome, controlled reason code, pseudonymous subject ref
 and policy version.
 
 Never record raw CPF, birth date, customer name, income, expenses, debts, dependents,
-messages, prompts, API payloads, access tokens, secrets, or stack traces containing those
-values. Reason codes are uppercase machine-readable identifiers, not free text.
+messages, prompts, currency requests, API payloads, access tokens, secrets, or stack traces
+containing those values. Reason codes are uppercase machine-readable identifiers, not free text.
 
 Financial interview answers exist only in the in-memory conversation state while the five
 questions are being completed. The UI replaces them with neutral labels, and the fields are

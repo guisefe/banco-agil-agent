@@ -4,6 +4,7 @@ import pytest
 
 from app.config import (
     AUDIT_KEY_ENVIRONMENT_VARIABLE,
+    EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE,
     ConfigurationError,
     load_settings,
 )
@@ -18,6 +19,7 @@ def test_settings_use_ephemeral_key_when_environment_is_missing(tmp_path: Path) 
     assert settings.score_policy_file == tmp_path / "data" / "score_limite.csv"
     assert settings.credit_request_file == tmp_path / "data" / "solicitacoes_aumento_limite.csv"
     assert settings.audit_file == tmp_path / "data" / "audit_events.jsonl"
+    assert settings.exchange_api_key is None
 
 
 def test_settings_use_configured_stable_key(tmp_path: Path) -> None:
@@ -30,6 +32,15 @@ def test_settings_use_configured_stable_key(tmp_path: Path) -> None:
 
     assert settings.uses_ephemeral_audit_key is False
     assert settings.pseudonymization_key == configured_key.encode()
+
+
+def test_settings_read_optional_exchange_api_key(tmp_path: Path) -> None:
+    settings = load_settings(
+        project_root=tmp_path,
+        environment={EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE: "demo-key"},
+    )
+
+    assert settings.exchange_api_key == "demo-key"
 
 
 def test_settings_reject_short_configured_key(tmp_path: Path) -> None:

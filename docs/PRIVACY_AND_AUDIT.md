@@ -28,6 +28,10 @@ Never record raw CPF, birth date, customer name, income, expenses, debts, depend
 messages, prompts, API payloads, access tokens, secrets, or stack traces containing those
 values. Reason codes are uppercase machine-readable identifiers, not free text.
 
+Financial interview answers exist only in the in-memory conversation state while the five
+questions are being completed. The UI replaces them with neutral labels, and the fields are
+cleared after score recalculation or global conversation termination.
+
 `subject_ref` is produced with HMAC-SHA-256 and a secret key of at least 32 bytes. The key
 must come from a secret manager or protected environment variable and must never be stored
 in Git. HMAC pseudonymization reduces exposure, but it is not anonymization: the reference
@@ -51,6 +55,10 @@ and at rest, service identities, least-privilege access, integrity protection, a
 backup rules, and deletion controls. Separate audit access from application administration.
 An audit persistence failure must block a credit decision until it can be recorded; it may
 be handled differently for non-critical telemetry.
+
+The score update follows the same principle through compensation: if its critical profile
+event cannot be appended, the previous score is restored. A later handoff-event failure is
+non-critical and does not reverse a score update whose critical event was already recorded.
 
 ## Retention and data-subject rights
 

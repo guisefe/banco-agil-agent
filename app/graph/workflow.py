@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.credit import CreditAgent
+from app.agents.interview import CreditInterviewAgent
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
 from app.audit.privacy import pseudonymize_subject
@@ -11,7 +12,8 @@ from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState, initial_state
 from app.tools.conversation import end_conversation, is_end_request
 
-GraphRoute = Literal["triage", "credit"]
+GraphRoute = Literal["triage", "credit", "interview"]
+InterviewRoute = Literal["credit_reanalysis", "end"]
 
 
 class AgentUnavailableError(RuntimeError):
@@ -24,11 +26,13 @@ class ConversationWorkflow:
         *,
         triage_agent: TriageAgent,
         credit_agent: CreditAgent,
+        interview_agent: CreditInterviewAgent,
         audit_writer: AuditWriter,
         pseudonymization_key: bytes,
     ) -> None:
         self._triage_agent = triage_agent
         self._credit_agent = credit_agent
+        self._interview_agent = interview_agent
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
         builder: StateGraph[
@@ -43,13 +47,21 @@ class ConversationWorkflow:
         )
         builder.add_node("triage", self._run_triage)
         builder.add_node("credit", self._run_credit)
+        builder.add_node("interview", self._run_interview)
+        builder.add_node("credit_reanalysis", self._run_credit_reanalysis)
         builder.add_conditional_edges(
             START,
             self._route,
-            {"triage": "triage", "credit": "credit"},
+            {"triage": "triage", "credit": "credit", "interview": "interview"},
         )
         builder.add_edge("triage", END)
         builder.add_edge("credit", END)
+        builder.add_conditional_edges(
+            "interview",
+            self._route_after_interview,
+            {"credit_reanalysis": "credit_reanalysis", "end": END},
+        )
+        builder.add_edge("credit_reanalysis", END)
         self._graph: CompiledStateGraph[
             ConversationState,
             None,
@@ -69,7 +81,7 @@ class ConversationWorkflow:
             raise ValueError("conversation has already ended")
         if is_end_request(user_message):
             return self._end_by_user_request(state, user_message)
-        if state["active_agent"] not in {"triage", "credit"}:
+        if state["active_agent"] not in {"triage", "credit", "interview"}:
             raise AgentUnavailableError(
                 f"agent '{state['active_agent']}' is not available in this sprint"
             )
@@ -86,11 +98,25 @@ class ConversationWorkflow:
     def _run_credit(self, state: ConversationState) -> ConversationState:
         return self._credit_agent.respond(state, state["user_message"])
 
+    def _run_interview(self, state: ConversationState) -> ConversationState:
+        return self._interview_agent.respond(state, state["user_message"])
+
+    def _run_credit_reanalysis(self, state: ConversationState) -> ConversationState:
+        return self._credit_agent.reanalyze_pending_request(state)
+
     @staticmethod
     def _route(state: ConversationState) -> GraphRoute:
         if state["active_agent"] == "credit":
             return "credit"
+        if state["active_agent"] == "interview":
+            return "interview"
         return "triage"
+
+    @staticmethod
+    def _route_after_interview(state: ConversationState) -> InterviewRoute:
+        if state["active_agent"] == "credit" and state["requested_credit_limit"] is not None:
+            return "credit_reanalysis"
+        return "end"
 
     def _end_by_user_request(
         self,

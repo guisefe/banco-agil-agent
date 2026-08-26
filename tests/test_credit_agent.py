@@ -394,6 +394,79 @@ def test_credit_agent_serializes_concurrent_decisions_against_latest_limit() -> 
     assert {state["active_agent"] for state in results} == {"credit", "triage"}
 
 
+def test_credit_agent_approves_pending_request_after_score_reanalysis() -> None:
+    agent, customers, _, requests, audit = make_agent(
+        score_policy_repository=ScorePolicyRepositoryStub(maximum_limit=Decimal("10000.00"))
+    )
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert state["requested_credit_limit"] is None
+    assert "aprovada" in state["assistant_message"]
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("6000.00")
+    assert requests.requests[0].status == "aprovado"
+    assert audit.events[-1].reason_code == "CREDIT_REANALYSIS_APPROVED"
+
+
+def test_credit_agent_finishes_after_reanalysis_remains_rejected() -> None:
+    agent, customers, _, requests, audit = make_agent()
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert state["requested_credit_limit"] is None
+    assert "ainda não pôde" in state["assistant_message"]
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("2500.00")
+    assert requests.requests[0].status == "rejeitado"
+    assert audit.events[-1].reason_code == "CREDIT_REANALYSIS_REJECTED"
+
+
+def test_credit_agent_recognizes_request_already_satisfied_during_reanalysis() -> None:
+    customer = replace(make_customer(), credit_limit=Decimal("7000.00"))
+    agent, _, _, requests, audit = make_agent(customer_repository=CustomerRepositoryStub(customer))
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert state["requested_credit_limit"] is None
+    assert "já atende" in state["assistant_message"]
+    assert not requests.requests
+    assert audit.events[-1].reason_code == "CREDIT_REANALYSIS_ALREADY_SATISFIED"
+
+
+def test_credit_agent_requires_pending_limit_for_reanalysis() -> None:
+    agent, _, _, _, _ = make_agent()
+
+    with pytest.raises(ValueError, match="pending requested limit"):
+        agent.reanalyze_pending_request(make_state())
+
+
+def test_credit_agent_keeps_reanalysis_result_when_handoff_audit_fails() -> None:
+    audit = AuditWriterStub(fail_on_append=2)
+    agent, customers, _, requests, _ = make_agent(
+        score_policy_repository=ScorePolicyRepositoryStub(maximum_limit=Decimal("10000.00")),
+        audit_writer=audit,
+    )
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("6000.00")
+    assert requests.requests[0].status == "aprovado"
+
+
 def test_credit_agent_requires_cpf_for_subject_reference() -> None:
     agent, _, _, _, _ = make_agent()
     state = make_state()

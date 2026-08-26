@@ -92,13 +92,22 @@ def test_audit_event_rejects_free_text_reason_code() -> None:
 @pytest.mark.parametrize("field", ["subject_ref", "policy_version"])
 def test_audit_event_rejects_blank_optional_reference_fields(field: str) -> None:
     with pytest.raises(ValueError, match=field):
-        AuditEvent(
-            event_type="conversation_started",
-            conversation_id="conversation-123",
-            turn_number=0,
-            agent="triage",
-            **{field: " "},
-        )
+        if field == "subject_ref":
+            AuditEvent(
+                event_type="conversation_started",
+                conversation_id="conversation-123",
+                turn_number=0,
+                agent="triage",
+                subject_ref=" ",
+            )
+        else:
+            AuditEvent(
+                event_type="conversation_started",
+                conversation_id="conversation-123",
+                turn_number=0,
+                agent="triage",
+                policy_version=" ",
+            )
 
 
 def test_credit_decision_requires_explainable_metadata() -> None:

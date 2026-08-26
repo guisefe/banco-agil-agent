@@ -9,9 +9,9 @@ projeto foi desenvolvido para o desafio técnico da Tech For Humans e prioriza r
 negócio determinísticas, separação de responsabilidades, testes automatizados,
 rastreabilidade e proteção de dados pessoais.
 
-> **Status atual:** fundação, Triagem, orquestração, interface Streamlit e Agente de
-> Crédito concluídos. Entrevista de Crédito e Câmbio serão conectados incrementalmente e
-> só serão marcados como concluídos após testes automatizados.
+> **Status atual:** fundação, Triagem, Crédito, Entrevista de Crédito, orquestração e
+> interface Streamlit concluídos. O Agente de Câmbio será conectado na próxima etapa e só
+> será marcado como concluído após testes automatizados.
 
 ## Visão Geral do Projeto
 
@@ -50,13 +50,13 @@ flowchart TD
 
 ### Componentes
 
-- **Interface:** Streamlit oferece o chat usado para simular o atendimento incremental.
-- **Orquestração:** um grafo de estados controlará turnos, autenticação, handoffs e
+- **Interface:** Streamlit oferece o chat usado para simular o atendimento disponível.
+- **Orquestração:** um grafo de estados controla turnos, autenticação, handoffs e
   encerramento.
-- **Agentes:** cada agente poderá executar apenas ações pertencentes ao seu escopo.
-- **Ferramentas:** autenticação, leitura e escrita de CSV, cálculo de score, consulta de
-  câmbio e encerramento serão funções explícitas e testáveis.
-- **Auditoria:** eventos de negócio serão registrados separadamente das mensagens e dos
+- **Agentes:** cada agente executa apenas ações pertencentes ao seu escopo.
+- **Ferramentas:** autenticação, leitura e escrita de CSV, cálculo de score e encerramento
+  são funções explícitas e testáveis; a consulta de câmbio permanece planejada.
+- **Auditoria:** eventos de negócio são registrados separadamente das mensagens e dos
   dados financeiros.
 
 ### Fluxo de autenticação
@@ -93,7 +93,7 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Modelo imutável de eventos de auditoria.
 - [x] Pseudonimização de referência do titular com HMAC-SHA-256.
 - [x] Persistência local de auditoria em JSONL com acesso restrito.
-- [x] Testes automatizados e cobertura mínima obrigatória de 80%.
+- [x] Testes automatizados e cobertura mínima obrigatória de 95%.
 - [x] CI com formatação, lint, tipagem e testes.
 - [x] Dependabot para dependências Python/uv e GitHub Actions.
 - [x] Validação de CPF e data de nascimento em `clientes.csv`.
@@ -112,6 +112,12 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Auditoria da decisão sem CPF, score ou valores financeiros.
 - [x] Oferta e handoff para entrevista após rejeição.
 - [x] Encerramento global, inclusive após handoff para Crédito.
+- [x] Entrevista estruturada com renda, emprego, despesas, dependentes e dívidas.
+- [x] Fórmula de score determinística, versionada e limitada ao intervalo de 0 a 1000.
+- [x] Atualização atômica do score em `clientes.csv` com compensação em falha de auditoria.
+- [x] Remoção dos dados financeiros do estado ao concluir ou encerrar a conversa.
+- [x] Reanálise automática do limite originalmente rejeitado após a entrevista.
+- [x] Mascaramento das respostas financeiras no histórico da interface.
 
 ### Roadmap do desafio
 
@@ -119,7 +125,7 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 - [x] Roteamento autenticado e encerramento global.
 - [x] Agente de Crédito e consulta de limite.
 - [x] Solicitação e decisão de aumento de limite.
-- [ ] Agente de Entrevista e recálculo de score entre 0 e 1000.
+- [x] Agente de Entrevista e recálculo de score entre 0 e 1000.
 - [ ] Agente de Câmbio com API externa e tratamento de indisponibilidade.
 - [x] Interface conversacional inicial com Streamlit.
 - [ ] Testes de integração do atendimento completo.
@@ -170,6 +176,13 @@ decisão completa é serializada para sempre validar o pedido contra o limite ma
 A atualização do cliente usa substituição atômica e o caso de falha ao registrar uma
 aprovação restaura o limite anterior. Em produção, os dois registros pertenceriam à mesma
 transação em um banco de dados e teriam chave de idempotência.
+
+### Recálculo reproduzível sem decisão da LLM
+
+A fórmula sugerida pelo desafio foi implementada com `Decimal`, pesos explícitos e
+arredondamento `ROUND_HALF_UP`. O resultado é limitado entre 0 e 1000 antes de ser salvo.
+Se a auditoria crítica do novo score falhar, o repositório restaura o score anterior; uma
+falha posterior apenas no evento de handoff não desfaz uma atualização já confirmada.
 
 ### Estado atual versus arquitetura final
 
@@ -228,7 +241,7 @@ uv run mypy app
 uv run pytest
 ```
 
-O `pytest` mede a cobertura do pacote `app` e falha quando o total fica abaixo de 80%.
+O `pytest` mede a cobertura do pacote `app` e falha quando o total fica abaixo de 95%.
 Esses mesmos comandos são executados automaticamente pelo GitHub Actions.
 
 ### Executar a aplicação
@@ -245,9 +258,10 @@ Use um dos clientes fictícios para testar a Triagem:
 | `111.111.111-11` | `03/11/1985` |
 
 Depois da autenticação, escolha crédito e consulte o limite ou solicite um aumento. Para o
-cliente com score 650, `R$ 5.000,00` é aprovado e um valor superior é rejeitado, oferecendo
-o handoff para a entrevista. Os módulos ainda indisponíveis bloqueiam novas mensagens sem
-revelar a transição interna. Nenhuma chave real deve ser adicionada ao repositório.
+cliente com score 650, `R$ 5.000,00` é aprovado e um valor superior oferece a entrevista.
+Responda às cinco perguntas; ao final, o score é atualizado e o mesmo limite é reanalisado
+automaticamente. O módulo de câmbio ainda bloqueia novas mensagens sem revelar a transição
+interna. Nenhuma chave real deve ser adicionada ao repositório.
 
 ## Segurança e Privacidade
 

@@ -111,6 +111,24 @@ def test_csv_repository_updates_credit_limit_atomically(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_csv_repository_updates_credit_score_atomically(tmp_path: Path) -> None:
+    customer_file = tmp_path / "clientes.csv"
+    customer_file.write_text(
+        "cpf,nome,data_nascimento,limite_credito,score\n"
+        "00000000000,Ana Exemplo,1990-05-20,2500.00,650\n",
+        encoding="utf-8",
+    )
+    repository = CsvCustomerRepository(customer_file)
+
+    repository.update_credit_score(cpf="00000000000", credit_score=840)
+
+    customer = repository.get_by_cpf(cpf="00000000000")
+    assert customer is not None
+    assert customer.credit_score == 840
+    assert customer.credit_limit == Decimal("2500.00")
+    assert not list(tmp_path.glob("*.tmp"))
+
+
 def test_csv_repository_preserves_extra_columns_when_updating_limit(tmp_path: Path) -> None:
     customer_file = tmp_path / "clientes.csv"
     customer_file.write_text(
@@ -167,6 +185,14 @@ def test_csv_repository_rejects_invalid_credit_updates(tmp_path: Path) -> None:
             cpf="99999999999",
             credit_limit=Decimal("5000.00"),
         )
+
+
+@pytest.mark.parametrize("score", [-1, 1001, True])
+def test_csv_repository_rejects_invalid_score_updates(tmp_path: Path, score: int) -> None:
+    repository = CsvCustomerRepository(tmp_path / "unused.csv")
+
+    with pytest.raises(CustomerRepositoryError, match="between 0 and 1000"):
+        repository.update_credit_score(cpf="00000000000", credit_score=score)
 
 
 def test_csv_repository_rejects_duplicate_cpf_for_credit_operations(tmp_path: Path) -> None:

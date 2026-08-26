@@ -24,6 +24,7 @@ def make_customer(**overrides: object) -> Customer:
         ({"cpf": " "}, "cpf"),
         ({"name": " "}, "name"),
         ({"credit_limit": Decimal("-0.01")}, "credit_limit"),
+        ({"credit_limit": Decimal("Infinity")}, "credit_limit"),
         ({"credit_score": -1}, "credit_score"),
         ({"credit_score": 1001}, "credit_score"),
     ],

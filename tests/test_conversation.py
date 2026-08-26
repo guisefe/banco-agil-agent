@@ -19,6 +19,14 @@ def test_initial_state_uses_safe_defaults() -> None:
 
     assert state["active_agent"] == "triage"
     assert state["triage_stage"] == "greeting"
+    assert state["credit_stage"] == "awaiting_action"
+    assert state["requested_credit_limit"] is None
+    assert state["interview_stage"] == "awaiting_income"
+    assert state["monthly_income"] is None
+    assert state["employment_type"] is None
+    assert state["fixed_expenses"] is None
+    assert state["dependents"] is None
+    assert state["has_active_debts"] is None
     assert state["end_reason"] is None
 
 

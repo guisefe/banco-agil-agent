@@ -31,6 +31,14 @@ class CreditCustomerRepository(Protocol):
         """Persist the approved credit limit for one customer."""
 
 
+class InterviewCustomerRepository(Protocol):
+    def get_by_cpf(self, *, cpf: str) -> Customer | None:
+        """Return one customer by CPF or None when it does not exist."""
+
+    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
+        """Persist the recalculated score for one customer."""
+
+
 class CsvCustomerRepository:
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -51,7 +59,22 @@ class CsvCustomerRepository:
     def update_credit_limit(self, *, cpf: str, credit_limit: Decimal) -> None:
         if not credit_limit.is_finite() or credit_limit < 0:
             raise CustomerRepositoryError("credit limit must be non-negative")
+        self._update_field(
+            cpf=cpf,
+            field_name="limite_credito",
+            value=f"{credit_limit:.2f}",
+        )
 
+    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
+        if isinstance(credit_score, bool) or not 0 <= credit_score <= 1000:
+            raise CustomerRepositoryError("credit score must be between 0 and 1000")
+        self._update_field(
+            cpf=cpf,
+            field_name="score",
+            value=str(credit_score),
+        )
+
+    def _update_field(self, *, cpf: str, field_name: str, value: str) -> None:
         with _CUSTOMER_WRITE_LOCK:
             rows, fieldnames = self._read_rows()
             matches = [row for row in rows if row.get("cpf", "").strip() == cpf]
@@ -59,7 +82,7 @@ class CsvCustomerRepository:
                 raise CustomerRepositoryError("customer was not found")
             if len(matches) > 1:
                 raise CustomerRepositoryError("customer cpf is duplicated")
-            matches[0]["limite_credito"] = f"{credit_limit:.2f}"
+            matches[0][field_name] = value
             self._replace_rows(rows, fieldnames=fieldnames)
 
     def _read_customers(self) -> list[Customer]:

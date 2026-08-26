@@ -292,7 +292,7 @@ def _identify_destination(message: str) -> DestinationAgent | None:
 def _handoff_message(destination: DestinationAgent) -> str:
     messages: Mapping[DestinationAgent, str] = {
         "credit": "Certo. Vamos consultar ou revisar seu limite de crédito.",
-        "interview": "Certo. Vamos iniciar sua entrevista financeira.",
+        "interview": ("Certo. Vamos iniciar sua entrevista financeira. Qual é sua renda mensal?"),
         "exchange": "Certo. Qual moeda você deseja consultar?",
     }
     return messages[destination]

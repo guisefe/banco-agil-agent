@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from app.models.conversation import initial_state
 from app.tools.conversation import end_conversation, is_end_request, normalize_text
 
@@ -17,6 +19,11 @@ def test_end_conversation_returns_updated_copy() -> None:
     original_state["cpf"] = "00000000000"
     original_state["birth_date"] = "1990-05-20"
     original_state["customer_name"] = "Ana Exemplo"
+    original_state["monthly_income"] = Decimal("5000")
+    original_state["employment_type"] = "formal"
+    original_state["fixed_expenses"] = Decimal("2000")
+    original_state["dependents"] = 1
+    original_state["has_active_debts"] = False
 
     ended_state = end_conversation(
         original_state,
@@ -30,4 +37,9 @@ def test_end_conversation_returns_updated_copy() -> None:
     assert ended_state["cpf"] is None
     assert ended_state["birth_date"] is None
     assert ended_state["customer_name"] is None
+    assert ended_state["monthly_income"] is None
+    assert ended_state["employment_type"] is None
+    assert ended_state["fixed_expenses"] is None
+    assert ended_state["dependents"] is None
+    assert ended_state["has_active_debts"] is None
     assert original_state["end_reason"] is None

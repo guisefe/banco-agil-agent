@@ -10,11 +10,11 @@ from app.graph.workflow import ConversationWorkflow
 from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRepository
 from app.repositories.customers import CsvCustomerRepository
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
-from app.services.intent import (
+from app.services.understanding import (
     ConversationInterpreter,
-    DeterministicIntentInterpreter,
-    OpenAICompatibleIntentInterpreter,
-    ResilientIntentInterpreter,
+    DeterministicConversationInterpreter,
+    OpenAICompatibleConversationInterpreter,
+    ResilientConversationInterpreter,
 )
 
 
@@ -29,13 +29,13 @@ def build_application(*, settings: Settings | None = None) -> Application:
     resolved_settings = settings or load_settings()
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
-    deterministic_interpreter = DeterministicIntentInterpreter()
-    intent_interpreter: ConversationInterpreter
+    deterministic_interpreter = DeterministicConversationInterpreter()
+    conversation_interpreter: ConversationInterpreter
     if resolved_settings.llm_api_key is None:
-        intent_interpreter = deterministic_interpreter
+        conversation_interpreter = deterministic_interpreter
     else:
-        intent_interpreter = ResilientIntentInterpreter(
-            primary=OpenAICompatibleIntentInterpreter(
+        conversation_interpreter = ResilientConversationInterpreter(
+            primary=OpenAICompatibleConversationInterpreter(
                 api_key=resolved_settings.llm_api_key,
                 base_url=resolved_settings.llm_base_url,
                 model=resolved_settings.llm_model,
@@ -46,7 +46,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        intent_interpreter=intent_interpreter,
+        intent_interpreter=conversation_interpreter,
     )
     credit_agent = CreditAgent(
         customer_repository=customer_repository,
@@ -54,14 +54,14 @@ def build_application(*, settings: Settings | None = None) -> Application:
         request_repository=CsvCreditRequestRepository(resolved_settings.credit_request_file),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
-        intent_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
+        intent_interpreter=conversation_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
     )
     exchange_agent = ExchangeAgent(
         exchange_repository=AwesomeApiExchangeRateRepository(
@@ -69,7 +69,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         ),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
     )
     return Application(
         workflow=ConversationWorkflow(

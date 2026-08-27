@@ -8,7 +8,10 @@ from streamlit.testing.v1 import AppTest
 from app.graph.workflow import ConversationWorkflow
 from app.models.exchange import ExchangeQuote
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
-from app.services.intent import IntentInterpretationError, OpenAICompatibleIntentInterpreter
+from app.services.understanding import (
+    InterpretationError,
+    OpenAICompatibleConversationInterpreter,
+)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -39,13 +42,17 @@ def test_streamlit_app_shows_when_llm_mode_is_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_interpretation(
-        interpreter: OpenAICompatibleIntentInterpreter,
+        interpreter: OpenAICompatibleConversationInterpreter,
         message: str,
     ) -> None:
-        raise IntentInterpretationError("simulated provider failure")
+        raise InterpretationError("simulated provider failure")
 
     monkeypatch.setenv("GROQ_API_KEY", "test-only-key")
-    monkeypatch.setattr(OpenAICompatibleIntentInterpreter, "interpret", fail_interpretation)
+    monkeypatch.setattr(
+        OpenAICompatibleConversationInterpreter,
+        "interpret",
+        fail_interpretation,
+    )
 
     app = make_app_test().run()
 

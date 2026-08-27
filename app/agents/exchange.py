@@ -8,7 +8,7 @@ from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState
 from app.models.exchange import ExchangeQuote
 from app.repositories.exchange import ExchangeRateRepository, ExchangeRateUnavailableError
-from app.services.intent import DeterministicIntentInterpreter, FieldInterpreter
+from app.services.understanding import DeterministicConversationInterpreter, FieldInterpreter
 from app.tools.conversation import normalize_text
 
 _SUPPORTED_CURRENCIES = frozenset({"USD", "EUR", "ARS", "GBP", "JPY"})
@@ -38,7 +38,7 @@ class ExchangeAgent:
         self._exchange_repository = exchange_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
-        self._field_interpreter = field_interpreter or DeterministicIntentInterpreter()
+        self._field_interpreter = field_interpreter or DeterministicConversationInterpreter()
 
     def respond(
         self,

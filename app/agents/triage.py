@@ -7,9 +7,9 @@ from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState
 from app.models.intent import IntentInterpretation, IntentName
 from app.repositories.customers import CustomerRepository, CustomerRepositoryError
-from app.services.intent import (
+from app.services.understanding import (
     INTENT_POLICY_VERSION,
-    DeterministicIntentInterpreter,
+    DeterministicConversationInterpreter,
     IntentInterpreter,
 )
 from app.tools.conversation import end_conversation, is_end_request
@@ -37,7 +37,7 @@ class TriageAgent:
         self._customer_repository = customer_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
-        self._intent_interpreter = intent_interpreter or DeterministicIntentInterpreter()
+        self._intent_interpreter = intent_interpreter or DeterministicConversationInterpreter()
 
     def start(self, state: ConversationState) -> ConversationState:
         if state["triage_stage"] != "greeting" or state["end_reason"] is not None:

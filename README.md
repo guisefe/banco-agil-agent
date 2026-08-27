@@ -30,15 +30,14 @@ da autenticação, que permite no máximo três tentativas.
 ```mermaid
 flowchart TD
     UI[Streamlit] --> G[LangGraph]
-    G --> T[Triagem]
-    T -->|crédito| C[Crédito]
-    T -->|entrevista| E[Entrevista]
-    T -->|câmbio| X[Câmbio]
-    E -->|reanálise| C
-    T --> L[LLM + fallback]
-    C --> CSV[(CSVs)]
-    E --> CSV
-    X --> API[API de câmbio]
+    G --> A[Triagem, Crédito, Entrevista e Câmbio]
+    A --> U[Interpretação híbrida]
+    U --> L[Groq]
+    U --> F[Fallback local]
+    A --> CSV[(CSVs)]
+    A --> API[API de câmbio]
+    A --> AUD[(Auditoria JSONL)]
+    A -->|handoffs| G
 ```
 
 O estado tipado guarda a etapa atual, autenticação e dados temporários. O grafo executa os
@@ -89,7 +88,7 @@ Depois da autenticação, a LLM recebe a mensagem e devolve JSON com:
 
 - intenção dentro de uma lista fechada;
 - moeda, quando o pedido é de câmbio;
-- novo limite total, quando informado pelo cliente.
+- novo limite total, quando informado pelo cliente;
 - respostas normalizadas da entrevista, como emprego, renda, despesas e dependentes;
 - respostas equivalentes a sim ou não durante os handoffs.
 
@@ -152,13 +151,26 @@ nascimento, score, renda ou texto completo da conversa. Detalhes e limitações 
 - encerramento em qualquer agente;
 - fallback local quando a LLM está ausente ou indisponível.
 
+### Aderência ao desafio
+
+| Requisito do PDF | Implementação |
+| --- | --- |
+| Exatamente quatro agentes | `app/agents/` contém Triagem, Crédito, Entrevista e Câmbio. |
+| Autenticação e três tentativas | Triagem exige CPF + nascimento antes de qualquer handoff. |
+| Crédito por CSV | Política, clientes e solicitações passam por repositórios CSV. |
+| Entrevista e score de 0 a 1000 | Cinco respostas validadas e fórmula determinística limitada ao intervalo. |
+| Cotação em tempo real | Câmbio consulta a AwesomeAPI com timeout e erro controlado. |
+| LLM e agentes | LangGraph coordena os handoffs; Groq interpreta linguagem livre com fallback local. |
+| UI simples | Streamlit oferece uma conversa única e oculta a troca interna de agentes. |
+| Encerramento global | “encerrar” funciona em qualquer etapa do atendimento. |
+
 ## Estrutura
 
 ```text
 app/
 ├── agents/        # quatro agentes do desafio
 ├── graph/         # estado e transições LangGraph
-├── services/      # interpretação por LLM e fallback
+├── services/      # entendimento híbrido da conversa
 ├── repositories/  # CSVs e API de câmbio
 ├── models/        # tipos e regras de domínio
 ├── tools/         # CPF, dinheiro e encerramento
@@ -179,6 +191,9 @@ unset VIRTUAL_ENV
 uv sync --locked --dev
 uv run streamlit run streamlit_app.py
 ```
+
+Se a pasta `banco-agil-agent` já existir, entre nela e execute a partir de `unset VIRTUAL_ENV`;
+não faça um segundo clone dentro do primeiro.
 
 O `unset VIRTUAL_ENV` evita que um ambiente virtual herdado do Codespace seja confundido com
 o `.venv` criado pelo `uv`.
@@ -206,6 +221,11 @@ A barra lateral mostra o estado da integração:
 - `LLM falhou — fallback ativo`: a chamada falhou e o classificador local assumiu o turno;
 - `fallback local`: nenhuma chave foi encontrada ao iniciar a aplicação.
 
+Para confirmar que a LLM está realmente sendo usada, autentique-se e escreva uma frase que o
+fallback não extrai sozinho, como “preciso de um fôlego de quatro mil no cartão”. A barra
+lateral deve mudar para `LLM ativa`. Se mostrar `LLM falhou — fallback ativo`, confira a chave,
+o modelo e a conectividade e reinicie o Streamlit.
+
 ## Testes
 
 ```bash
@@ -215,20 +235,25 @@ uv run mypy app tests
 uv run pytest
 ```
 
-A suíte tem 146 testes voltados aos fluxos e falhas que mudam o comportamento do sistema. A
-CI exige cobertura mínima de 90%; o estado atual fica acima de 93%. O objetivo é proteger as
-regras do desafio, não produzir casos repetidos para perseguir 100%.
+A suíte cobre os fluxos e falhas que mudam o comportamento do sistema. A CI exige cobertura
+mínima de 90%; o objetivo é proteger as regras do desafio, não produzir casos repetidos para
+perseguir 100%. O contrato HTTP da LLM é testado com transporte simulado; a chamada real exige
+uma chave do provedor e faz parte do roteiro manual abaixo.
 
 ### Roteiro manual curto
 
-Use um dos perfis fictícios de `data/clientes.csv`.
+Use um dos perfis fictícios de `data/clientes.csv`. Para o caminho mais curto, autentique Ana
+Martins com CPF `00000000000` e nascimento `20/05/1990`. Para testar cliente sem score, use
+Mariana Souza, CPF `22222222222` e nascimento `14/02/1995`.
 
 1. Autentique com CPF e data de nascimento.
 2. Pergunte “qual é meu score?” e depois “qual é meu limite?”.
-3. Peça um aumento informando o novo limite na própria frase.
+3. Com a LLM configurada, escreva “preciso de um fôlego de quatro mil no cartão” e confirme
+   `LLM ativa` na barra lateral.
 4. Teste um cliente sem score e conclua a entrevista.
 5. Confirme que o pedido original é reanalisado sem digitar o valor novamente.
-6. Peça a cotação do dólar.
+6. Peça “quanto está a moeda dos Estados Unidos?” e confirme a cotação ou a mensagem controlada
+   de indisponibilidade da API.
 7. Digite “encerrar” durante uma nova operação.
 
 Os passos de crédito alteram os CSVs. Faça uma cópia de `data/` antes de repetir a

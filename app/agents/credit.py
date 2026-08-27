@@ -18,8 +18,8 @@ from app.repositories.credit import (
     ScorePolicyRepository,
 )
 from app.repositories.customers import CreditCustomerRepository, CustomerRepositoryError
-from app.services.intent import (
-    DeterministicIntentInterpreter,
+from app.services.understanding import (
+    DeterministicConversationInterpreter,
     FieldInterpreter,
     IntentInterpreter,
 )
@@ -63,8 +63,8 @@ class CreditAgent:
         self._requests = request_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
-        self._intent_interpreter = intent_interpreter or DeterministicIntentInterpreter()
-        self._field_interpreter = field_interpreter or DeterministicIntentInterpreter()
+        self._intent_interpreter = intent_interpreter or DeterministicConversationInterpreter()
+        self._field_interpreter = field_interpreter or DeterministicConversationInterpreter()
 
     def respond(
         self,

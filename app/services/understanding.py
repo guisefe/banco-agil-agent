@@ -60,8 +60,8 @@ _CURRENCY_TERMS: Mapping[SupportedCurrency, frozenset[str]] = {
 }
 
 
-class IntentInterpretationError(RuntimeError):
-    """Raised when an intent provider cannot return a safe structured result."""
+class InterpretationError(RuntimeError):
+    """Raised when a provider cannot return a safe structured interpretation."""
 
 
 class IntentInterpreter(Protocol):
@@ -84,7 +84,7 @@ class ConversationInterpreter(IntentInterpreter, FieldInterpreter, Protocol):
     """Interpret routing intents and stage-specific conversational fields."""
 
 
-class DeterministicIntentInterpreter:
+class DeterministicConversationInterpreter:
     def interpret(self, message: str) -> IntentInterpretation:
         normalized = normalize_text(message)
         currency = _identify_currency(normalized)
@@ -189,7 +189,7 @@ class DeterministicIntentInterpreter:
         return FieldInterpretation(value=value, source="deterministic")
 
 
-class OpenAICompatibleIntentInterpreter:
+class OpenAICompatibleConversationInterpreter:
     def __init__(
         self,
         *,
@@ -222,7 +222,7 @@ class OpenAICompatibleIntentInterpreter:
             )
             return _parse_chat_completion(payload)
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
-            raise IntentInterpretationError("LLM intent interpretation failed") from error
+            raise InterpretationError("LLM intent interpretation failed") from error
 
     def interpret_field(
         self,
@@ -243,7 +243,7 @@ class OpenAICompatibleIntentInterpreter:
                 source="llm",
             )
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
-            raise IntentInterpretationError("LLM field interpretation failed") from error
+            raise InterpretationError("LLM field interpretation failed") from error
 
     def _request_json(self, *, system_prompt: str, user_message: str) -> object:
         request_payload: dict[str, object] = {
@@ -277,7 +277,7 @@ class OpenAICompatibleIntentInterpreter:
             return response.json()
 
 
-class ResilientIntentInterpreter:
+class ResilientConversationInterpreter:
     def __init__(
         self,
         *,
@@ -290,7 +290,7 @@ class ResilientIntentInterpreter:
     def interpret(self, message: str) -> IntentInterpretation:
         try:
             return self._primary.interpret(message)
-        except IntentInterpretationError:
+        except InterpretationError:
             return replace(
                 self._fallback.interpret(message),
                 source="deterministic_fallback",
@@ -306,7 +306,7 @@ class ResilientIntentInterpreter:
         fallback = cast(FieldInterpreter, self._fallback)
         try:
             return primary.interpret_field(message, expected=expected)
-        except IntentInterpretationError:
+        except InterpretationError:
             return replace(
                 fallback.interpret_field(message, expected=expected),
                 source="deterministic_fallback",
@@ -320,17 +320,17 @@ def _parse_chat_completion(payload: object) -> IntentInterpretation:
         "currency",
         "requested_limit",
     }:
-        raise IntentInterpretationError("LLM structured output has an invalid schema")
+        raise InterpretationError("LLM structured output has an invalid schema")
 
     intent_value = parsed["intent"]
     currency_value = parsed["currency"]
     requested_limit_value = parsed["requested_limit"]
     if not isinstance(intent_value, str) or intent_value not in ALLOWED_INTENTS:
-        raise IntentInterpretationError("LLM returned a forbidden intent")
+        raise InterpretationError("LLM returned a forbidden intent")
     if currency_value is not None and (
         not isinstance(currency_value, str) or currency_value not in SUPPORTED_CURRENCIES
     ):
-        raise IntentInterpretationError("LLM returned an unsupported currency")
+        raise InterpretationError("LLM returned an unsupported currency")
 
     intent = cast(IntentName, intent_value)
     currency = cast(SupportedCurrency | None, currency_value)
@@ -343,41 +343,41 @@ def _parse_chat_completion(payload: object) -> IntentInterpretation:
             requested_limit=requested_limit,
         )
     except ValueError as error:
-        raise IntentInterpretationError("LLM returned inconsistent fields") from error
+        raise InterpretationError("LLM returned inconsistent fields") from error
 
 
 def _parse_json_content(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict):
-        raise IntentInterpretationError("LLM response must be an object")
+        raise InterpretationError("LLM response must be an object")
     choices = payload.get("choices")
     if not isinstance(choices, list) or len(choices) != 1:
-        raise IntentInterpretationError("LLM response must contain exactly one choice")
+        raise InterpretationError("LLM response must contain exactly one choice")
     choice = choices[0]
     if not isinstance(choice, dict):
-        raise IntentInterpretationError("LLM choice is invalid")
+        raise InterpretationError("LLM choice is invalid")
     message = choice.get("message")
     if not isinstance(message, dict):
-        raise IntentInterpretationError("LLM message is invalid")
+        raise InterpretationError("LLM message is invalid")
     content = message.get("content")
     if not isinstance(content, str):
-        raise IntentInterpretationError("LLM content is invalid")
+        raise InterpretationError("LLM content is invalid")
     parsed = json.loads(content)
     if not isinstance(parsed, dict):
-        raise IntentInterpretationError("LLM content must be a JSON object")
+        raise InterpretationError("LLM content must be a JSON object")
     return cast(dict[str, object], parsed)
 
 
 def _parse_field_completion(payload: object, *, expected: ExpectedField) -> str | None:
     parsed = _parse_json_content(payload)
     if set(parsed) != {"value"}:
-        raise IntentInterpretationError("LLM field output has an invalid schema")
+        raise InterpretationError("LLM field output has an invalid schema")
     value = parsed["value"]
     if value is not None and not isinstance(value, str):
-        raise IntentInterpretationError("LLM field value must be text or null")
+        raise InterpretationError("LLM field value must be text or null")
     if value is None:
         return None
     if not _field_value_is_valid(value, expected=expected):
-        raise IntentInterpretationError("LLM field value does not match the expected format")
+        raise InterpretationError("LLM field value does not match the expected format")
     return value
 
 
@@ -413,11 +413,11 @@ def _parse_requested_limit(value: object) -> Decimal | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        raise IntentInterpretationError("LLM returned an invalid requested limit")
+        raise InterpretationError("LLM returned an invalid requested limit")
     try:
         return Decimal(str(value)).quantize(Decimal("0.01"))
     except InvalidOperation as error:
-        raise IntentInterpretationError("LLM returned an invalid requested limit") from error
+        raise InterpretationError("LLM returned an invalid requested limit") from error
 
 
 def _extract_explicit_limit(message: str) -> Decimal | None:

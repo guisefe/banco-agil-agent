@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Literal, TypedDict
 from uuid import uuid4
 
+from app.models.intent import IntentName, SupportedCurrency
 from app.models.interview import EmploymentType
 
 AgentName = Literal[
@@ -60,6 +61,8 @@ class ConversationState(TypedDict):
     requested_credit_limit: Decimal | None
     pending_credit_requested_at: str | None
     handoff_pending: bool
+    interpreted_intent: IntentName | None
+    interpreted_currency: SupportedCurrency | None
     interview_stage: InterviewStage
     monthly_income: Decimal | None
     employment_type: EmploymentType | None
@@ -88,6 +91,8 @@ def initial_state() -> ConversationState:
         "requested_credit_limit": None,
         "pending_credit_requested_at": None,
         "handoff_pending": False,
+        "interpreted_intent": None,
+        "interpreted_currency": None,
         "interview_stage": "awaiting_income",
         "monthly_income": None,
         "employment_type": None,

@@ -13,6 +13,7 @@ from app.models.interview import (
     parse_employment_type,
 )
 from app.repositories.customers import CustomerRepositoryError, InterviewCustomerRepository
+from app.services.intent import DeterministicIntentInterpreter, ExpectedField, FieldInterpreter
 from app.tools.conversation import clear_interview_data
 from app.tools.money import parse_non_negative_money
 
@@ -24,6 +25,7 @@ class CreditInterviewAgent:
         customer_repository: InterviewCustomerRepository,
         audit_writer: AuditWriter,
         pseudonymization_key: bytes,
+        field_interpreter: FieldInterpreter | None = None,
     ) -> None:
         if len(pseudonymization_key) < MIN_PSEUDONYMIZATION_KEY_BYTES:
             raise ValueError(
@@ -32,6 +34,7 @@ class CreditInterviewAgent:
         self._customers = customer_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
+        self._field_interpreter = field_interpreter or DeterministicIntentInterpreter()
 
     def begin(self, state: ConversationState) -> ConversationState:
         self._ensure_interview_can_respond(state)
@@ -66,67 +69,90 @@ class CreditInterviewAgent:
             return self._collect_debts_and_finish(next_state, user_message)
         raise ValueError("credit interview agent is not ready to receive a user message")
 
-    @staticmethod
     def _collect_income(
+        self,
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
         try:
             state["monthly_income"] = parse_non_negative_money(user_message)
         except ValueError:
-            state["assistant_message"] = (
-                "Informe uma renda mensal válida, por exemplo R$ 5.000,00. "
-                "Se não possui renda, informe 0."
-            )
-            return state
+            try:
+                state["monthly_income"] = parse_non_negative_money(
+                    self._field_value(state, user_message, expected="money")
+                )
+            except ValueError:
+                state["assistant_message"] = (
+                    "Informe uma renda mensal válida, por exemplo R$ 5.000,00. "
+                    "Se não possui renda, informe 0."
+                )
+                return state
         state["interview_stage"] = "awaiting_employment"
         state["assistant_message"] = "Qual é seu tipo de emprego: formal, autônomo ou desempregado?"
         return state
 
-    @staticmethod
     def _collect_employment(
+        self,
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
         try:
             state["employment_type"] = parse_employment_type(user_message)
         except ValueError:
-            state["assistant_message"] = "Informe uma das opções: formal, autônomo ou desempregado."
-            return state
+            try:
+                state["employment_type"] = parse_employment_type(
+                    self._field_value(state, user_message, expected="employment")
+                )
+            except ValueError:
+                state["assistant_message"] = (
+                    "Informe uma das opções: formal, autônomo ou desempregado."
+                )
+                return state
         state["interview_stage"] = "awaiting_expenses"
         state["assistant_message"] = (
             "Qual é o total das suas despesas fixas mensais? Se não possui, informe 0."
         )
         return state
 
-    @staticmethod
     def _collect_expenses(
+        self,
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
         try:
             state["fixed_expenses"] = parse_non_negative_money(user_message)
         except ValueError:
-            state["assistant_message"] = (
-                "Informe um valor válido para as despesas fixas mensais. Se não possui, informe 0."
-            )
-            return state
+            try:
+                state["fixed_expenses"] = parse_non_negative_money(
+                    self._field_value(state, user_message, expected="money")
+                )
+            except ValueError:
+                state["assistant_message"] = (
+                    "Informe um valor válido para as despesas fixas mensais. "
+                    "Se não possui, informe 0."
+                )
+                return state
         state["interview_stage"] = "awaiting_dependents"
         state["assistant_message"] = "Quantas pessoas dependem financeiramente de você?"
         return state
 
-    @staticmethod
     def _collect_dependents(
+        self,
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
         try:
             state["dependents"] = parse_dependents(user_message)
         except ValueError:
-            state["assistant_message"] = (
-                "Informe o número de dependentes usando um número inteiro, como 0, 1, 2 ou 3."
-            )
-            return state
+            try:
+                state["dependents"] = parse_dependents(
+                    self._field_value(state, user_message, expected="dependents")
+                )
+            except ValueError:
+                state["assistant_message"] = (
+                    "Informe o número de dependentes usando um número inteiro, como 0, 1, 2 ou 3."
+                )
+                return state
         state["interview_stage"] = "awaiting_debts"
         state["assistant_message"] = "Você possui dívidas ativas? Responda sim ou não."
         return state
@@ -139,8 +165,13 @@ class CreditInterviewAgent:
         try:
             state["has_active_debts"] = parse_debt_answer(user_message)
         except ValueError:
-            state["assistant_message"] = "Responda apenas sim ou não sobre as dívidas ativas."
-            return state
+            try:
+                state["has_active_debts"] = parse_debt_answer(
+                    self._field_value(state, user_message, expected="yes_no")
+                )
+            except ValueError:
+                state["assistant_message"] = "Responda apenas sim ou não sobre as dívidas ativas."
+                return state
 
         profile = self._profile_from(state)
         score = calculate_credit_score(profile)
@@ -190,6 +221,17 @@ class CreditInterviewAgent:
             )
         self._audit_handoff(completed_state)
         return completed_state
+
+    def _field_value(
+        self,
+        state: ConversationState,
+        message: str,
+        *,
+        expected: ExpectedField,
+    ) -> str:
+        interpretation = self._field_interpreter.interpret_field(message, expected=expected)
+        state["last_interpretation_source"] = interpretation.source
+        return interpretation.value or ""
 
     @staticmethod
     def _profile_from(state: ConversationState) -> FinancialProfile:

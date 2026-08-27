@@ -8,6 +8,7 @@ from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState
 from app.models.exchange import ExchangeQuote
 from app.repositories.exchange import ExchangeRateRepository, ExchangeRateUnavailableError
+from app.services.intent import DeterministicIntentInterpreter, FieldInterpreter
 from app.tools.conversation import normalize_text
 
 _SUPPORTED_CURRENCIES = frozenset({"USD", "EUR", "ARS", "GBP", "JPY"})
@@ -28,6 +29,7 @@ class ExchangeAgent:
         exchange_repository: ExchangeRateRepository,
         audit_writer: AuditWriter,
         pseudonymization_key: bytes,
+        field_interpreter: FieldInterpreter | None = None,
     ) -> None:
         if len(pseudonymization_key) < MIN_PSEUDONYMIZATION_KEY_BYTES:
             raise ValueError(
@@ -36,6 +38,7 @@ class ExchangeAgent:
         self._exchange_repository = exchange_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
+        self._field_interpreter = field_interpreter or DeterministicIntentInterpreter()
 
     def respond(
         self,
@@ -52,6 +55,13 @@ class ExchangeAgent:
         next_state["user_message"] = user_message
 
         currency = next_state["interpreted_currency"] or _identify_currency(user_message)
+        if currency is None:
+            interpretation = self._field_interpreter.interpret_field(
+                user_message,
+                expected="currency",
+            )
+            next_state["last_interpretation_source"] = interpretation.source
+            currency = interpretation.value
         next_state["interpreted_intent"] = None
         next_state["interpreted_currency"] = None
         next_state["interpreted_requested_limit"] = None

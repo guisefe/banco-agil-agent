@@ -104,8 +104,8 @@ def _reset_conversation(application: Application) -> None:
 def _interpretation_mode(application: Application, state: ConversationState) -> str:
     if not application.uses_llm:
         return "fallback local"
-    if state["last_intent_source"] == "llm":
+    if state["last_interpretation_source"] == "llm":
         return "LLM ativa"
-    if state["last_intent_source"] == "deterministic_fallback":
+    if state["last_interpretation_source"] == "deterministic_fallback":
         return "LLM falhou — fallback ativo"
     return "LLM configurada — aguardando mensagem"

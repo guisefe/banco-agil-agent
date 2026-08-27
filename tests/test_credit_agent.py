@@ -236,7 +236,7 @@ def test_credit_agent_clarifies_unknown_or_ambiguous_action() -> None:
         )
     )
     state = agent.respond(make_state(), "preciso de um fôlego de quatro mil")
-    assert state["last_intent_source"] == "llm"
+    assert state["last_interpretation_source"] == "llm"
     assert customers.customer is not None
     assert customers.customer.credit_limit == Decimal("4000.00")
 

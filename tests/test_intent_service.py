@@ -9,6 +9,8 @@ import pytest
 from app.models.intent import IntentInterpretation
 from app.services.intent import (
     DeterministicIntentInterpreter,
+    ExpectedField,
+    FieldInterpretation,
     IntentInterpretationError,
     OpenAICompatibleIntentInterpreter,
     ResilientIntentInterpreter,
@@ -96,6 +98,24 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
     assert "000.000.000-00" not in sent_message
     assert "5000" in sent_message
     assert "[CPF]" in sent_message
+
+    field_interpreter = OpenAICompatibleIntentInterpreter(
+        api_key="test-secret",
+        base_url="https://llm.example/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": '{"value":"formal"}'}}]},
+            )
+        ),
+    )
+    field_result = field_interpreter.interpret_field(
+        "trabalho registrado em uma empresa",
+        expected="employment",
+    )
+    assert field_result.value == "formal"
+    assert field_result.source == "llm"
 
 
 def test_llm_interpreter_rejects_transport_and_schema_failures() -> None:
@@ -223,6 +243,14 @@ class FailingInterpreter:
     def interpret(self, message: str) -> IntentInterpretation:
         raise IntentInterpretationError("simulated provider failure")
 
+    def interpret_field(
+        self,
+        message: str,
+        *,
+        expected: ExpectedField,
+    ) -> FieldInterpretation:
+        raise IntentInterpretationError("simulated provider failure")
+
 
 def test_resilient_interpreter_uses_deterministic_fallback() -> None:
     interpreter = ResilientIntentInterpreter(
@@ -234,6 +262,10 @@ def test_resilient_interpreter_uses_deterministic_fallback() -> None:
 
     assert result.intent == "credit_limit_query"
     assert result.source == "deterministic_fallback"
+
+    field_result = interpreter.interpret_field("trabalho registrado", expected="employment")
+    assert field_result.value == "formal"
+    assert field_result.source == "deterministic_fallback"
 
 
 def test_intent_model_rejects_invalid_combinations() -> None:

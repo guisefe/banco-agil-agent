@@ -6,9 +6,12 @@ import pytest
 
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
+from app.audit.writer import AuditWriteError
 from app.models.conversation import ConversationState, initial_state
 from app.models.customer import Customer
+from app.models.intent import IntentInterpretation
 from app.repositories.customers import CustomerRepositoryError
+from app.services.intent import IntentInterpreter
 
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 
@@ -16,8 +19,11 @@ PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 @dataclass
 class RecordingAuditWriter:
     events: list[AuditEvent] = field(default_factory=list)
+    failing_event_type: str | None = None
 
     def append(self, event: AuditEvent) -> None:
+        if event.event_type == self.failing_event_type:
+            raise AuditWriteError("simulated audit failure")
         self.events.append(event)
 
 
@@ -57,6 +63,7 @@ def make_agent(
     *,
     customer: Customer | None = None,
     repository_error: CustomerRepositoryError | None = None,
+    intent_interpreter: IntentInterpreter | None = None,
 ) -> tuple[TriageAgent, StubCustomerRepository, RecordingAuditWriter]:
     repository = StubCustomerRepository(customer=customer, error=repository_error)
     audit_writer = RecordingAuditWriter()
@@ -64,6 +71,7 @@ def make_agent(
         customer_repository=repository,
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        intent_interpreter=intent_interpreter,
     )
     return agent, repository, audit_writer
 
@@ -203,6 +211,75 @@ def test_triage_routes_explicit_score_recalculation_to_interview() -> None:
     state = agent.respond(state, "quero recalcular score")
 
     assert state["active_agent"] == "interview"
+
+
+@dataclass
+class StubIntentInterpreter:
+    interpretation: IntentInterpretation
+    messages: list[str] = field(default_factory=list)
+
+    def interpret(self, message: str) -> IntentInterpretation:
+        self.messages.append(message)
+        return self.interpretation
+
+
+def test_triage_uses_llm_interpretation_only_after_authentication() -> None:
+    interpreter = StubIntentInterpreter(
+        IntentInterpretation(intent="credit_limit_increase", source="llm")
+    )
+    agent, _, audit = make_agent(
+        customer=make_customer(),
+        intent_interpreter=interpreter,
+    )
+    state = authenticate(agent)
+
+    state = agent.respond(state, "preciso de um fôlego maior no cartão")
+
+    assert interpreter.messages == ["preciso de um fôlego maior no cartão"]
+    assert state["active_agent"] == "credit"
+    assert state["interpreted_intent"] == "credit_limit_increase"
+    assert [event.event_type for event in audit.events[-2:]] == [
+        "intent_interpreted",
+        "agent_handoff",
+    ]
+    assert audit.events[-2].reason_code == "INTENT_INTERPRETED_BY_LLM"
+    assert "fôlego" not in repr(audit.events)
+
+
+def test_triage_records_deterministic_fallback_without_exposing_message() -> None:
+    interpreter = StubIntentInterpreter(
+        IntentInterpretation(
+            intent="credit_score_query",
+            source="deterministic_fallback",
+        )
+    )
+    agent, _, audit = make_agent(
+        customer=make_customer(),
+        intent_interpreter=interpreter,
+    )
+    state = authenticate(agent)
+
+    state = agent.respond(state, "qual é meu score secreto?")
+
+    assert state["active_agent"] == "credit"
+    assert audit.events[-2].reason_code == "LLM_INTENT_FALLBACK_USED"
+    assert "secreto" not in repr(audit.events)
+
+
+def test_triage_does_not_block_llm_routing_when_telemetry_audit_fails() -> None:
+    interpreter = StubIntentInterpreter(
+        IntentInterpretation(intent="credit_limit_query", source="llm")
+    )
+    agent, _, audit = make_agent(
+        customer=make_customer(),
+        intent_interpreter=interpreter,
+    )
+    state = authenticate(agent)
+    audit.failing_event_type = "intent_interpreted"
+
+    state = agent.respond(state, "qual é meu limite?")
+
+    assert state["active_agent"] == "credit"
 
 
 @pytest.mark.parametrize(

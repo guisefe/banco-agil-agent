@@ -31,6 +31,18 @@ def test_streamlit_app_starts_triage_without_exceptions(
     assert "CPF" in app.chat_message[0].markdown[0].value
     assert app.chat_input[0].disabled is False
     assert not app.warning
+    assert any("fallback local" in item.value for item in app.markdown)
+
+
+def test_streamlit_app_shows_when_llm_mode_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "test-only-key")
+
+    app = make_app_test().run()
+
+    assert not app.exception
+    assert any("LLM + fallback seguro" in item.value for item in app.markdown)
 
 
 def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:

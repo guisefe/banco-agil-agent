@@ -9,6 +9,7 @@ from app.models.conversation import AgentName
 AuditEventType = Literal[
     "conversation_started",
     "authentication_attempted",
+    "intent_interpreted",
     "agent_handoff",
     "credit_decision_made",
     "credit_assessment_deferred",

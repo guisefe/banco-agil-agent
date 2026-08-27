@@ -3,21 +3,21 @@ from typing import Literal
 
 from app.audit.events import AuditEvent
 from app.audit.privacy import MIN_PSEUDONYMIZATION_KEY_BYTES, pseudonymize_subject
-from app.audit.writer import AuditWriter
+from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState
+from app.models.intent import IntentInterpretation, IntentName
 from app.repositories.customers import CustomerRepository, CustomerRepositoryError
-from app.tools.conversation import end_conversation, is_end_request, normalize_text
+from app.services.intent import (
+    INTENT_POLICY_VERSION,
+    DeterministicIntentInterpreter,
+    IntentInterpreter,
+)
+from app.tools.conversation import end_conversation, is_end_request
 from app.tools.identity import IdentityInputError, normalize_cpf, parse_birth_date
 
 MAX_AUTHENTICATION_ATTEMPTS = 3
 
 DestinationAgent = Literal["credit", "interview", "exchange"]
-
-_INTENT_TERMS: Mapping[DestinationAgent, frozenset[str]] = {
-    "credit": frozenset({"limite", "aumento de limite", "consultar score", "meu score"}),
-    "interview": frozenset({"entrevista", "recalcular score", "atualizar score", "melhorar score"}),
-    "exchange": frozenset({"cambio", "cotacao", "dolar", "euro", "moeda"}),
-}
 
 
 class TriageAgent:
@@ -27,6 +27,7 @@ class TriageAgent:
         customer_repository: CustomerRepository,
         audit_writer: AuditWriter,
         pseudonymization_key: bytes,
+        intent_interpreter: IntentInterpreter | None = None,
     ) -> None:
         if len(pseudonymization_key) < MIN_PSEUDONYMIZATION_KEY_BYTES:
             raise ValueError(
@@ -36,6 +37,7 @@ class TriageAgent:
         self._customer_repository = customer_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
+        self._intent_interpreter = intent_interpreter or DeterministicIntentInterpreter()
 
     def start(self, state: ConversationState) -> ConversationState:
         if state["triage_stage"] != "greeting" or state["end_reason"] is not None:
@@ -216,8 +218,12 @@ class TriageAgent:
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
-        destination = _identify_destination(user_message)
+        interpretation = self._intent_interpreter.interpret(user_message)
+        self._record_intent_interpretation(state, interpretation)
+        destination = _destination_for(interpretation.intent)
         if destination is None:
+            state["interpreted_intent"] = None
+            state["interpreted_currency"] = None
             state["assistant_message"] = (
                 "Posso ajudar com limite ou aumento de crédito, entrevista financeira "
                 "ou cotação de moedas. Qual opção você deseja?"
@@ -226,6 +232,8 @@ class TriageAgent:
 
         state["active_agent"] = destination
         state["handoff_pending"] = True
+        state["interpreted_intent"] = interpretation.intent
+        state["interpreted_currency"] = interpretation.currency
         state["assistant_message"] = _handoff_message(destination)
         self._append_event(
             AuditEvent(
@@ -239,6 +247,34 @@ class TriageAgent:
             )
         )
         return state
+
+    def _record_intent_interpretation(
+        self,
+        state: ConversationState,
+        interpretation: IntentInterpretation,
+    ) -> None:
+        if interpretation.source == "deterministic":
+            return
+        reason_code = (
+            "INTENT_INTERPRETED_BY_LLM"
+            if interpretation.source == "llm"
+            else "LLM_INTENT_FALLBACK_USED"
+        )
+        try:
+            self._append_event(
+                AuditEvent(
+                    event_type="intent_interpreted",
+                    conversation_id=state["conversation_id"],
+                    turn_number=state["turn_number"],
+                    agent="triage",
+                    outcome="success",
+                    reason_code=reason_code,
+                    subject_ref=self._subject_ref(state),
+                    policy_version=INTENT_POLICY_VERSION,
+                )
+            )
+        except AuditWriteError:
+            pass
 
     def _finish_by_user_request(self, state: ConversationState) -> ConversationState:
         ended_state = end_conversation(
@@ -276,23 +312,19 @@ class TriageAgent:
         self._audit_writer.append(event)
 
 
-def _identify_destination(message: str) -> DestinationAgent | None:
-    normalized_message = normalize_text(message)
-    recalculation_terms = ("recalcular score", "atualizar score", "melhorar score")
-    if any(term in normalized_message for term in recalculation_terms):
+def _destination_for(intent: IntentName) -> DestinationAgent | None:
+    if intent in {
+        "credit_menu",
+        "credit_limit_query",
+        "credit_score_query",
+        "credit_limit_increase",
+    }:
+        return "credit"
+    if intent == "credit_interview":
         return "interview"
-    matches = {
-        agent
-        for agent, terms in _INTENT_TERMS.items()
-        if any(term in normalized_message for term in terms)
-    }
-    if "credito" in normalized_message and "interview" not in matches:
-        matches.add("credit")
-    if "score" in normalized_message and "interview" not in matches:
-        matches.add("credit")
-    if len(matches) != 1:
-        return None
-    return matches.pop()
+    if intent == "exchange_quote":
+        return "exchange"
+    return None
 
 
 def _handoff_message(destination: DestinationAgent) -> str:

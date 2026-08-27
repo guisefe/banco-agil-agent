@@ -37,6 +37,8 @@ class CreditInterviewAgent:
         self._ensure_interview_can_respond(state)
         next_state = state.copy()
         next_state["handoff_pending"] = False
+        next_state["interpreted_intent"] = None
+        next_state["interpreted_currency"] = None
         next_state["interview_stage"] = "awaiting_income"
         next_state["assistant_message"] = (
             "Vamos calcular seu score interno com cinco informações. "

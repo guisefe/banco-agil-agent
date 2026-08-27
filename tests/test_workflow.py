@@ -15,8 +15,10 @@ from app.models.conversation import initial_state
 from app.models.credit import CreditRequest
 from app.models.customer import Customer
 from app.models.exchange import ExchangeQuote
+from app.models.intent import IntentInterpretation
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
+from app.services.intent import IntentInterpreter
 
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 
@@ -100,13 +102,17 @@ class ExchangeRepositoryStub:
         )
 
 
-def make_workflow() -> ConversationWorkflow:
+def make_workflow(
+    *,
+    intent_interpreter: IntentInterpreter | None = None,
+) -> ConversationWorkflow:
     audit_writer = RecordingAuditWriter()
     customer_repository = CustomerRepositoryStub()
     triage_agent = TriageAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        intent_interpreter=intent_interpreter,
     )
     credit_agent = CreditAgent(
         customer_repository=customer_repository,
@@ -171,6 +177,26 @@ def test_workflow_answers_score_query_in_same_turn_as_triage_handoff() -> None:
     assert state["turn_number"] == 3
     assert state["active_agent"] == "triage"
     assert "650 de 1000" in state["assistant_message"]
+
+
+@dataclass
+class LlmIntentInterpreterStub:
+    def interpret(self, message: str) -> IntentInterpretation:
+        return IntentInterpretation(intent="credit_limit_increase", source="llm")
+
+
+def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
+    workflow = make_workflow(intent_interpreter=LlmIntentInterpreterStub())
+    state = workflow.start()
+    state = workflow.respond(state, "00000000000")
+    state = workflow.respond(state, "20/05/1990")
+
+    state = workflow.respond(state, "preciso de um fôlego maior no cartão")
+
+    assert state["turn_number"] == 3
+    assert state["active_agent"] == "credit"
+    assert state["credit_stage"] == "awaiting_requested_limit"
+    assert "novo limite" in state["assistant_message"]
 
 
 def test_workflow_routes_existing_exchange_state_from_graph_start() -> None:

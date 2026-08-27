@@ -10,6 +10,7 @@ from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState
 from app.models.credit import CreditRequest
 from app.models.customer import Customer
+from app.models.intent import IntentName
 from app.repositories.credit import (
     SCORE_POLICY_VERSION,
     CreditRepositoryError,
@@ -93,7 +94,11 @@ class CreditAgent:
         state: ConversationState,
         user_message: str,
     ) -> ConversationState:
-        action = _identify_action(user_message)
+        action = _action_from_interpretation(state["interpreted_intent"])
+        state["interpreted_intent"] = None
+        state["interpreted_currency"] = None
+        if action is None:
+            action = _identify_action(user_message)
         if action is None:
             state["assistant_message"] = (
                 "Posso consultar seu limite, informar seu score interno ou solicitar "
@@ -486,6 +491,17 @@ def _identify_action(message: str) -> CreditAction | None:
     if len(matches) != 1:
         return None
     return matches.pop()
+
+
+def _action_from_interpretation(intent: IntentName | None) -> CreditAction | None:
+    if intent is None:
+        return None
+    actions: Mapping[IntentName, CreditAction] = {
+        "credit_limit_query": "query_limit",
+        "credit_score_query": "query_score",
+        "credit_limit_increase": "increase",
+    }
+    return actions.get(intent)
 
 
 def _parse_yes_no(message: str) -> bool | None:

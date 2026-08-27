@@ -31,6 +31,8 @@ def render_app() -> None:
     with st.sidebar:
         st.subheader("Sessão")
         st.write("Canal: **Atendimento**")
+        interpretation_mode = "LLM + fallback seguro" if application.uses_llm else "fallback local"
+        st.write(f"Interpretação: **{interpretation_mode}**")
         st.write(f"Tentativas de autenticação: **{state['authentication_attempts']}/3**")
         if application.uses_ephemeral_audit_key:
             st.warning(

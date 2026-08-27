@@ -33,9 +33,21 @@ class CreditInterviewAgent:
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
 
+    def begin(self, state: ConversationState) -> ConversationState:
+        self._ensure_interview_can_respond(state)
+        next_state = state.copy()
+        next_state["handoff_pending"] = False
+        next_state["interview_stage"] = "awaiting_income"
+        next_state["assistant_message"] = (
+            "Vamos calcular seu score interno com cinco informações. "
+            "Qual é sua renda mensal? Se não possui renda, informe 0."
+        )
+        return next_state
+
     def respond(self, state: ConversationState, user_message: str) -> ConversationState:
         self._ensure_interview_can_respond(state)
         next_state = state.copy()
+        next_state["handoff_pending"] = False
         next_state["turn_number"] += 1
         next_state["user_message"] = "[REDACTED_FINANCIAL_INPUT]"
 

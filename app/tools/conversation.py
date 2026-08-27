@@ -42,6 +42,8 @@ def end_conversation(
     ended_state["birth_date"] = None
     ended_state["customer_name"] = None
     ended_state["requested_credit_limit"] = None
+    ended_state["pending_credit_requested_at"] = None
+    ended_state["handoff_pending"] = False
     return ended_state
 
 

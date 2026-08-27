@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from threading import Event, Lock, Thread
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 
@@ -80,6 +80,27 @@ class CreditRequestRepositoryStub:
         if self.error:
             raise CreditRepositoryError("request unavailable")
         self.requests.append(request)
+
+    def finalize_pending(
+        self,
+        *,
+        customer_cpf: str,
+        requested_at: datetime,
+        status: Literal["aprovado", "rejeitado"],
+    ) -> None:
+        if self.error:
+            raise CreditRepositoryError("request unavailable")
+        matches = [
+            (index, request)
+            for index, request in enumerate(self.requests)
+            if request.customer_cpf == customer_cpf
+            and request.requested_at == requested_at
+            and request.status == "pendente"
+        ]
+        if len(matches) != 1:
+            raise CreditRepositoryError("pending request unavailable")
+        index, request = matches[0]
+        self.requests[index] = replace(request, status=status)
 
 
 @dataclass
@@ -160,6 +181,32 @@ def test_credit_agent_queries_limit_and_returns_to_triage() -> None:
     assert "00000000000" not in repr(audit.events)
 
 
+def test_credit_agent_answers_natural_score_query_and_returns_to_triage() -> None:
+    agent, _, _, _, audit = make_agent()
+
+    state = agent.respond(make_state(), "quero saber meu score")
+
+    assert state["active_agent"] == "triage"
+    assert "650 de 1000" in state["assistant_message"]
+    assert audit.events[-1].reason_code == "CREDIT_SCORE_QUERIED"
+
+
+def test_credit_agent_distinguishes_missing_score_from_zero() -> None:
+    missing_customer = replace(make_customer(), credit_score=None)
+    agent, _, _, _, _ = make_agent(customer_repository=CustomerRepositoryStub(missing_customer))
+
+    state = agent.respond(make_state(), "qual meu score")
+
+    assert state["credit_stage"] == "offering_interview"
+    assert "não possui score" in state["assistant_message"]
+    assert "score zero" in state["assistant_message"]
+
+    zero_customer = replace(make_customer(), credit_score=0)
+    agent, _, _, _, _ = make_agent(customer_repository=CustomerRepositoryStub(zero_customer))
+    state = agent.respond(make_state(), "consultar score")
+    assert "0 de 1000" in state["assistant_message"]
+
+
 @pytest.mark.parametrize(
     "message",
     ["ajuda", "consultar e aumentar meu limite"],
@@ -229,7 +276,7 @@ def test_credit_agent_rejects_and_routes_to_interview_after_consent() -> None:
     assert state["requested_credit_limit"] == Decimal("6000.00")
     assert customers.customer is not None
     assert customers.customer.credit_limit == Decimal("2500.00")
-    assert requests.requests[0].status == "rejeitado"
+    assert [request.status for request in requests.requests] == ["rejeitado"]
     assert audit.events[-1].outcome == "rejected"
 
     state = agent.respond(state, "talvez")
@@ -250,6 +297,150 @@ def test_credit_agent_returns_to_triage_when_interview_is_declined() -> None:
     assert state["active_agent"] == "triage"
     assert state["requested_credit_limit"] is None
     assert audit.events[-1].reason_code == "INTERVIEW_DECLINED"
+
+
+def test_credit_agent_keeps_missing_score_request_pending_until_interview() -> None:
+    customer = replace(make_customer(), credit_score=None)
+    agent, _, _, requests, audit = make_agent(customer_repository=CustomerRepositoryStub(customer))
+    state = start_limit_request(agent)
+
+    state = agent.respond(state, "6000")
+
+    assert state["credit_stage"] == "offering_interview"
+    assert state["pending_credit_requested_at"] is not None
+    assert requests.requests[0].status == "pendente"
+    assert audit.events[-1].event_type == "credit_assessment_deferred"
+    assert audit.events[-1].reason_code == "MISSING_CREDIT_SCORE"
+
+    state = agent.respond(state, "não")
+
+    assert state["active_agent"] == "triage"
+    assert state["pending_credit_requested_at"] is None
+    assert str(requests.requests[0].status) == "rejeitado"
+
+
+def test_credit_agent_finalizes_missing_score_request_after_reanalysis() -> None:
+    customer = replace(make_customer(), credit_score=None)
+    customers = CustomerRepositoryStub(customer)
+    agent, _, policy, requests, _ = make_agent(customer_repository=customers)
+    state = start_limit_request(agent)
+    state = agent.respond(state, "6000")
+    customers.customer = replace(customer, credit_score=800)
+    policy.maximum_limit = Decimal("10000.00")
+    state["active_agent"] = "credit"
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert requests.requests[0].status == "aprovado"
+    assert len(requests.requests) == 1
+    assert state["pending_credit_requested_at"] is None
+
+
+def test_credit_agent_handles_invalid_pending_timestamp_without_crashing() -> None:
+    agent, _, _, _, _ = make_agent()
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+    state["pending_credit_requested_at"] = "invalid"
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert "Não foi possível" in state["assistant_message"]
+
+
+def test_credit_agent_rejects_naive_pending_timestamp() -> None:
+    agent, _, _, _, _ = make_agent()
+    state = make_state()
+    state["requested_credit_limit"] = Decimal("6000.00")
+    state["pending_credit_requested_at"] = "2026-08-27T12:00:00"
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert "Não foi possível" in state["assistant_message"]
+
+
+def test_credit_agent_finalizes_pending_request_when_limit_is_already_satisfied() -> None:
+    customer = replace(make_customer(), credit_score=None)
+    customers = CustomerRepositoryStub(customer)
+    agent, _, _, requests, _ = make_agent(customer_repository=customers)
+    state = start_limit_request(agent)
+    state = agent.respond(state, "6000")
+    customers.customer = replace(customer, credit_limit=Decimal("7000.00"), credit_score=800)
+    state["active_agent"] = "credit"
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert state["active_agent"] == "triage"
+    assert str(requests.requests[0].status) == "aprovado"
+
+
+def test_credit_agent_handles_pending_finalize_failure_when_limit_is_satisfied() -> None:
+    customer = replace(make_customer(), credit_score=None)
+    customers = CustomerRepositoryStub(customer)
+    requests = CreditRequestRepositoryStub()
+    agent, _, _, _, _ = make_agent(
+        customer_repository=customers,
+        request_repository=requests,
+    )
+    state = start_limit_request(agent)
+    state = agent.respond(state, "6000")
+    customers.customer = replace(customer, credit_limit=Decimal("7000.00"), credit_score=800)
+    requests.error = True
+    state["active_agent"] = "credit"
+
+    state = agent.reanalyze_pending_request(state)
+
+    assert "Não foi possível" in state["assistant_message"]
+
+
+def test_credit_agent_handles_pending_finalization_failures() -> None:
+    customer = replace(make_customer(), credit_score=None)
+    requests = CreditRequestRepositoryStub()
+    agent, customers, policy, _, _ = make_agent(
+        customer_repository=CustomerRepositoryStub(customer),
+        request_repository=requests,
+    )
+    state = start_limit_request(agent)
+    state = agent.respond(state, "6000")
+    requests.error = True
+
+    declined = agent.respond(state, "não")
+    assert "Não foi possível" in declined["assistant_message"]
+
+    customers.customer = replace(customer, credit_score=100)
+    policy.maximum_limit = Decimal("1000.00")
+    state["active_agent"] = "credit"
+    rejected = agent.reanalyze_pending_request(state)
+    assert "Não foi possível" in rejected["assistant_message"]
+
+
+@pytest.mark.parametrize("failure", ["audit", "request"])
+def test_credit_agent_handles_missing_score_deferral_failure(failure: str) -> None:
+    customer = replace(make_customer(), credit_score=None)
+    requests = CreditRequestRepositoryStub(error=failure == "request")
+    audit = AuditWriterStub(error=failure == "audit")
+    agent, _, _, _, _ = make_agent(
+        customer_repository=CustomerRepositoryStub(customer),
+        request_repository=requests,
+        audit_writer=audit,
+    )
+    state = start_limit_request(agent)
+
+    state = agent.respond(state, "6000")
+
+    assert "Não foi possível" in state["assistant_message"]
+
+
+def test_credit_agent_handles_missing_cpf_while_finalizing_decline() -> None:
+    agent, _, _, _, _ = make_agent()
+    state = make_state()
+    state["credit_stage"] = "offering_interview"
+    state["pending_credit_requested_at"] = "2026-08-27T12:00:00+00:00"
+    state["cpf"] = None
+
+    state = agent._handle_interview_offer(state, "não")
+
+    assert "Não foi possível" in state["assistant_message"]
 
 
 @pytest.mark.parametrize("missing", [True, False])

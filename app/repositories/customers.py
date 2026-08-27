@@ -35,7 +35,7 @@ class InterviewCustomerRepository(Protocol):
     def get_by_cpf(self, *, cpf: str) -> Customer | None:
         """Return one customer by CPF or None when it does not exist."""
 
-    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
+    def update_credit_score(self, *, cpf: str, credit_score: int | None) -> None:
         """Persist the recalculated score for one customer."""
 
 
@@ -65,13 +65,15 @@ class CsvCustomerRepository:
             value=f"{credit_limit:.2f}",
         )
 
-    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
-        if isinstance(credit_score, bool) or not 0 <= credit_score <= 1000:
+    def update_credit_score(self, *, cpf: str, credit_score: int | None) -> None:
+        if credit_score is not None and (
+            isinstance(credit_score, bool) or not 0 <= credit_score <= 1000
+        ):
             raise CustomerRepositoryError("credit score must be between 0 and 1000")
         self._update_field(
             cpf=cpf,
             field_name="score",
-            value=str(credit_score),
+            value="" if credit_score is None else str(credit_score),
         )
 
     def _update_field(self, *, cpf: str, field_name: str, value: str) -> None:
@@ -152,7 +154,7 @@ class CsvCustomerRepository:
                 name=row["nome"].strip(),
                 birth_date=date.fromisoformat(row["data_nascimento"].strip()),
                 credit_limit=Decimal(row["limite_credito"].strip()),
-                credit_score=int(row["score"].strip()),
+                credit_score=(int(row["score"].strip()) if row["score"].strip() else None),
             )
         except (KeyError, ValueError, InvalidOperation) as error:
             raise CustomerRepositoryError("customer record is invalid") from error

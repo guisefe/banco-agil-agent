@@ -20,11 +20,18 @@ from app.repositories.customers import CreditCustomerRepository, CustomerReposit
 from app.tools.conversation import normalize_text
 from app.tools.money import format_brl, parse_money
 
-CreditAction = Literal["query", "increase"]
+CreditAction = Literal["query_limit", "query_score", "increase"]
 
 _ACTION_TERMS: Mapping[CreditAction, frozenset[str]] = {
-    "query": frozenset({"consultar", "consulta", "limite atual"}),
-    "increase": frozenset({"aumentar", "aumento", "novo limite", "solicitar"}),
+    "query_limit": frozenset(
+        {"consultar limite", "consulta de limite", "limite atual", "qual meu limite"}
+    ),
+    "query_score": frozenset(
+        {"consultar score", "consulta de score", "qual meu score", "saber meu score", "ver score"}
+    ),
+    "increase": frozenset(
+        {"aumentar", "aumento", "novo limite", "mais limite", "solicitar limite"}
+    ),
 }
 _CREDIT_DECISION_LOCK = Lock()
 
@@ -49,10 +56,18 @@ class CreditAgent:
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
 
-    def respond(self, state: ConversationState, user_message: str) -> ConversationState:
+    def respond(
+        self,
+        state: ConversationState,
+        user_message: str,
+        *,
+        advance_turn: bool = True,
+    ) -> ConversationState:
         self._ensure_credit_can_respond(state)
         next_state = state.copy()
-        next_state["turn_number"] += 1
+        if advance_turn:
+            next_state["turn_number"] += 1
+        next_state["handoff_pending"] = False
         next_state["user_message"] = user_message
 
         if state["credit_stage"] == "awaiting_action":
@@ -81,7 +96,8 @@ class CreditAgent:
         action = _identify_action(user_message)
         if action is None:
             state["assistant_message"] = (
-                "Você deseja consultar seu limite atual ou solicitar um aumento?"
+                "Posso consultar seu limite, informar seu score interno ou solicitar "
+                "um aumento. O que você deseja?"
             )
             return state
         if action == "increase":
@@ -92,6 +108,21 @@ class CreditAgent:
         customer = self._load_customer(state)
         if customer is None:
             return self._repository_failure(state)
+        if action == "query_score":
+            if customer.credit_score is None:
+                state["credit_stage"] = "offering_interview"
+                state["assistant_message"] = (
+                    "Você ainda não possui score interno calculado. Isso não é score zero: "
+                    "significa que faltam dados para uma decisão automática. Deseja realizar "
+                    "a entrevista financeira para calcular seu score de 0 a 1000?"
+                )
+                return state
+            state["assistant_message"] = (
+                f"Seu score interno no Banco Ágil é {customer.credit_score} de 1000. "
+                "Ele é um dos critérios usados na política de limite. "
+                "Posso ajudar com outro assunto?"
+            )
+            return self._return_to_triage(state, reason_code="CREDIT_SCORE_QUERIED")
         state["assistant_message"] = (
             f"Seu limite atual é {format_brl(customer.credit_limit)}. "
             "Posso ajudar com outro assunto de crédito ou câmbio?"
@@ -127,7 +158,18 @@ class CreditAgent:
             return self._repository_failure(state)
         if requested_limit <= customer.credit_limit:
             if reanalysis:
+                try:
+                    pending_requested_at = self._pending_requested_at(state)
+                    if pending_requested_at is not None:
+                        self._requests.finalize_pending(
+                            customer_cpf=customer.cpf,
+                            requested_at=pending_requested_at,
+                            status="aprovado",
+                        )
+                except CreditRepositoryError:
+                    return self._repository_failure(state)
                 state["requested_credit_limit"] = None
+                state["pending_credit_requested_at"] = None
                 state["assistant_message"] = (
                     f"Seu limite atual de {format_brl(customer.credit_limit)} "
                     "já atende ao valor solicitado. Posso ajudar com outro assunto?"
@@ -142,15 +184,26 @@ class CreditAgent:
             )
             return state
 
+        if customer.credit_score is None:
+            return self._defer_request_for_interview(
+                state,
+                customer=customer,
+                requested_limit=requested_limit,
+            )
+
         try:
             maximum_limit = self._score_policy.maximum_limit_for(score=customer.credit_score)
         except CreditRepositoryError:
             return self._repository_failure(state)
 
         approved = requested_limit <= maximum_limit
+        try:
+            pending_requested_at = self._pending_requested_at(state) if reanalysis else None
+        except CreditRepositoryError:
+            return self._repository_failure(state)
         request = CreditRequest(
             customer_cpf=customer.cpf,
-            requested_at=datetime.now(UTC),
+            requested_at=pending_requested_at or datetime.now(UTC),
             current_limit=customer.credit_limit,
             requested_limit=requested_limit,
             status="aprovado" if approved else "rejeitado",
@@ -158,14 +211,21 @@ class CreditAgent:
         try:
             self._audit_decision(state, approved=approved)
             if approved:
-                self._persist_approved_request(request)
+                self._persist_approved_request(
+                    request,
+                    finalize_pending=pending_requested_at is not None,
+                )
             else:
-                self._requests.append(request)
+                self._persist_rejected_request(
+                    request,
+                    finalize_pending=pending_requested_at is not None,
+                )
         except (AuditWriteError, CreditRepositoryError, CustomerRepositoryError):
             return self._repository_failure(state)
 
         if approved:
             state["requested_credit_limit"] = None
+            state["pending_credit_requested_at"] = None
             state["assistant_message"] = (
                 f"Sua solicitação foi aprovada. Seu novo limite é "
                 f"{format_brl(requested_limit)}. Posso ajudar com outro assunto?"
@@ -180,6 +240,7 @@ class CreditAgent:
 
         if reanalysis:
             state["requested_credit_limit"] = None
+            state["pending_credit_requested_at"] = None
             state["assistant_message"] = (
                 "Mesmo após o recálculo do score, o limite solicitado ainda não pôde ser "
                 "aprovado. Posso ajudar com outro assunto?"
@@ -198,19 +259,46 @@ class CreditAgent:
         )
         return state
 
-    def _persist_approved_request(self, request: CreditRequest) -> None:
+    def _persist_approved_request(
+        self,
+        request: CreditRequest,
+        *,
+        finalize_pending: bool,
+    ) -> None:
         self._customers.update_credit_limit(
             cpf=request.customer_cpf,
             credit_limit=request.requested_limit,
         )
         try:
-            self._requests.append(request)
+            if finalize_pending:
+                self._requests.finalize_pending(
+                    customer_cpf=request.customer_cpf,
+                    requested_at=request.requested_at,
+                    status="aprovado",
+                )
+            else:
+                self._requests.append(request)
         except CreditRepositoryError:
             self._customers.update_credit_limit(
                 cpf=request.customer_cpf,
                 credit_limit=request.current_limit,
             )
             raise
+
+    def _persist_rejected_request(
+        self,
+        request: CreditRequest,
+        *,
+        finalize_pending: bool,
+    ) -> None:
+        if finalize_pending:
+            self._requests.finalize_pending(
+                customer_cpf=request.customer_cpf,
+                requested_at=request.requested_at,
+                status="rejeitado",
+            )
+        else:
+            self._requests.append(request)
 
     def _handle_interview_offer(
         self,
@@ -234,9 +322,78 @@ class CreditAgent:
             )
             return state
 
+        pending_requested_at = self._pending_requested_at(state)
+        if pending_requested_at is not None:
+            cpf = state["cpf"]
+            if cpf is None:
+                return self._repository_failure(state)
+            try:
+                self._requests.finalize_pending(
+                    customer_cpf=cpf,
+                    requested_at=pending_requested_at,
+                    status="rejeitado",
+                )
+            except CreditRepositoryError:
+                return self._repository_failure(state)
         state["requested_credit_limit"] = None
+        state["pending_credit_requested_at"] = None
         state["assistant_message"] = "Tudo bem. Posso ajudar com outro assunto?"
         return self._return_to_triage(state, reason_code="INTERVIEW_DECLINED")
+
+    def _defer_request_for_interview(
+        self,
+        state: ConversationState,
+        *,
+        customer: Customer,
+        requested_limit: Decimal,
+    ) -> ConversationState:
+        requested_at = datetime.now(UTC)
+        request = CreditRequest(
+            customer_cpf=customer.cpf,
+            requested_at=requested_at,
+            current_limit=customer.credit_limit,
+            requested_limit=requested_limit,
+            status="pendente",
+        )
+        try:
+            self._audit_writer.append(
+                AuditEvent(
+                    event_type="credit_assessment_deferred",
+                    conversation_id=state["conversation_id"],
+                    turn_number=state["turn_number"],
+                    agent="credit",
+                    outcome="success",
+                    reason_code="MISSING_CREDIT_SCORE",
+                    subject_ref=self._subject_ref(state),
+                    policy_version=SCORE_POLICY_VERSION,
+                )
+            )
+            self._requests.append(request)
+        except (AuditWriteError, CreditRepositoryError):
+            return self._repository_failure(state)
+
+        state["requested_credit_limit"] = requested_limit
+        state["pending_credit_requested_at"] = requested_at.isoformat()
+        state["credit_stage"] = "offering_interview"
+        state["assistant_message"] = (
+            "Sua solicitação ficou pendente porque ainda não há score interno suficiente "
+            "para uma decisão automática. Deseja realizar a entrevista financeira para "
+            "calcular um score de 0 a 1000 e reanalisar este mesmo pedido?"
+        )
+        return state
+
+    @staticmethod
+    def _pending_requested_at(state: ConversationState) -> datetime | None:
+        value = state["pending_credit_requested_at"]
+        if value is None:
+            return None
+        try:
+            requested_at = datetime.fromisoformat(value)
+        except ValueError as error:
+            raise CreditRepositoryError("pending request timestamp is invalid") from error
+        if requested_at.utcoffset() is None:
+            raise CreditRepositoryError("pending request timestamp must use a timezone")
+        return requested_at.astimezone(UTC)
 
     def _load_customer(self, state: ConversationState) -> Customer | None:
         cpf = state["cpf"]
@@ -322,6 +479,10 @@ def _identify_action(message: str) -> CreditAction | None:
         for action, terms in _ACTION_TERMS.items()
         if any(term in normalized_message for term in terms)
     }
+    if any(term in normalized_message.split() for term in {"consultar", "consulta"}) and (
+        "query_score" not in matches
+    ):
+        matches.add("query_limit")
     if len(matches) != 1:
         return None
     return matches.pop()

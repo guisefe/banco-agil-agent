@@ -1,10 +1,12 @@
 import csv
 import os
 from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from threading import Lock
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.models.credit import CreditRequest, ScoreBand
 
@@ -32,6 +34,15 @@ class ScorePolicyRepository(Protocol):
 class CreditRequestRepository(Protocol):
     def append(self, request: CreditRequest) -> None:
         """Persist one final credit request using the challenge schema."""
+
+    def finalize_pending(
+        self,
+        *,
+        customer_cpf: str,
+        requested_at: datetime,
+        status: Literal["aprovado", "rejeitado"],
+    ) -> None:
+        """Replace exactly one pending request with its final status."""
 
 
 class CsvScorePolicyRepository:
@@ -96,6 +107,64 @@ class CsvCreditRequestRepository:
                     os.fsync(request_file.fileno())
             except (OSError, UnicodeError, csv.Error) as error:
                 raise CreditRepositoryError("credit request could not be recorded") from error
+
+    def finalize_pending(
+        self,
+        *,
+        customer_cpf: str,
+        requested_at: datetime,
+        status: Literal["aprovado", "rejeitado"],
+    ) -> None:
+        requested_at_value = requested_at.isoformat()
+        with _REQUEST_WRITE_LOCK:
+            temporary_path: Path | None = None
+            try:
+                rows = self._read_rows()
+                matches = [
+                    row
+                    for row in rows
+                    if row["cpf_cliente"] == customer_cpf
+                    and row["data_hora_solicitacao"] == requested_at_value
+                    and row["status_pedido"] == "pendente"
+                ]
+                if len(matches) != 1:
+                    raise CreditRepositoryError("pending credit request was not found exactly once")
+                matches[0]["status_pedido"] = status
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                with NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    newline="",
+                    dir=self._path.parent,
+                    prefix=f".{self._path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as temporary_file:
+                    temporary_path = Path(temporary_file.name)
+                    writer = csv.DictWriter(
+                        temporary_file,
+                        fieldnames=CREDIT_REQUEST_COLUMNS,
+                    )
+                    writer.writeheader()
+                    writer.writerows(rows)
+                    temporary_file.flush()
+                    os.fsync(temporary_file.fileno())
+                temporary_path.replace(self._path)
+            except CreditRepositoryError:
+                raise
+            except (OSError, UnicodeError, csv.Error, KeyError, ValueError) as error:
+                if temporary_path is not None:
+                    temporary_path.unlink(missing_ok=True)
+                raise CreditRepositoryError(
+                    "pending credit request could not be finalized"
+                ) from error
+
+    def _read_rows(self) -> list[dict[str, str]]:
+        with self._path.open(newline="", encoding="utf-8") as request_file:
+            reader = csv.DictReader(request_file)
+            if list(reader.fieldnames or ()) != list(CREDIT_REQUEST_COLUMNS):
+                raise CreditRepositoryError("credit request data has an invalid schema")
+            return list(reader)
 
     def _validate_existing_header(self) -> None:
         with self._path.open(newline="", encoding="utf-8") as request_file:

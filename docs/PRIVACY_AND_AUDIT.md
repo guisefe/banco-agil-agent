@@ -40,18 +40,18 @@ technical logs, or audit events.
 
 ## LLM data boundary
 
-The LLM is a non-critical intent classifier, not a banking decision maker. It is called only
-after successful authentication while Triagem is waiting for a new subject. CPF, birth date,
-customer name, current limit, score, requested amount, income, employment, expenses,
-dependents, and debt answers are never added to its prompt.
+The LLM is a non-critical language interpreter, not a banking decision maker. After successful
+authentication, Triagem, Credit, Interview, and Exchange may use it to identify an intent or
+normalize one expected field. CPF and birth-date patterns are replaced before the request.
+Customer name, current limit, score, stored profile, policy rows, and previous messages are not
+added to its prompt.
 
-The provider receives only the current free-form intent message, truncated to 1,000
-characters after numeric sequences are replaced with `[NUMBER]`. Its output must match a
-closed JSON schema containing one allowed intent and, for exchange only, one supported
-currency. A timeout, HTTP failure, invalid JSON, forbidden intent, unsupported currency, or
-inconsistent field combination activates the deterministic fallback. Prompt instructions
-explicitly treat the customer message as untrusted data and prohibit authentication, score
-calculation, and credit approval.
+The provider receives only the current message, truncated to 1,000 characters. Depending on
+the active stage, that message may contain a requested amount or one financial interview
+answer. Its output must match a closed JSON schema for intent/entity extraction or a single
+normalized field. The Python domain validates the result and remains solely responsible for
+authentication, score calculation, credit approval, and persistence. A timeout, HTTP failure,
+invalid JSON, unsupported value, or inconsistent field activates the deterministic fallback.
 
 Audit records only whether interpretation used the LLM or the fallback and the policy version.
 It does not record the prompt, response, message, inferred intent, provider payload, or API key.

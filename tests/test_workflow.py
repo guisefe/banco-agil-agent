@@ -18,7 +18,11 @@ from app.models.exchange import ExchangeQuote
 from app.models.intent import IntentInterpretation
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
-from app.services.intent import IntentInterpreter
+from app.services.intent import (
+    ConversationInterpreter,
+    ExpectedField,
+    FieldInterpretation,
+)
 
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 
@@ -104,7 +108,7 @@ class ExchangeRepositoryStub:
 
 def make_workflow(
     *,
-    intent_interpreter: IntentInterpreter | None = None,
+    intent_interpreter: ConversationInterpreter | None = None,
 ) -> ConversationWorkflow:
     audit_writer = RecordingAuditWriter()
     customer_repository = CustomerRepositoryStub()
@@ -120,16 +124,20 @@ def make_workflow(
         request_repository=CreditRequestRepositoryStub(),
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        field_interpreter=intent_interpreter,
+        intent_interpreter=intent_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        field_interpreter=intent_interpreter,
     )
     exchange_agent = ExchangeAgent(
         exchange_repository=ExchangeRepositoryStub(),
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        field_interpreter=intent_interpreter,
     )
     return ConversationWorkflow(
         triage_agent=triage_agent,
@@ -182,11 +190,35 @@ def test_workflow_answers_score_query_in_same_turn_as_triage_handoff() -> None:
 @dataclass
 class LlmIntentInterpreterStub:
     def interpret(self, message: str) -> IntentInterpretation:
+        normalized = message.casefold()
+        if "entrevista" in normalized:
+            return IntentInterpretation(intent="credit_interview", source="llm")
+        if "estados unidos" in normalized:
+            return IntentInterpretation(
+                intent="exchange_quote",
+                source="llm",
+                currency="USD",
+            )
         return IntentInterpretation(
             intent="credit_limit_increase",
             source="llm",
             requested_limit=Decimal("4000.00"),
         )
+
+    def interpret_field(
+        self,
+        message: str,
+        *,
+        expected: ExpectedField,
+    ) -> FieldInterpretation:
+        values = {
+            "money": "1000.00" if "gasto" in message.casefold() else "10000.00",
+            "employment": "formal",
+            "dependents": "0",
+            "yes_no": "nao" if "não" in message.casefold() else "sim",
+            "currency": "USD",
+        }
+        return FieldInterpretation(value=values[expected], source="llm")
 
 
 def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
@@ -203,13 +235,13 @@ def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
 
 
 def test_workflow_routes_existing_exchange_state_from_graph_start() -> None:
-    workflow = make_workflow()
+    workflow = make_workflow(intent_interpreter=LlmIntentInterpreterStub())
     state = initial_state()
     state["authenticated"] = True
     state["cpf"] = "00000000000"
     state["active_agent"] = "exchange"
 
-    state = workflow.respond(state, "USD")
+    state = workflow.respond(state, "a moeda dos Estados Unidos")
 
     assert "Cotação de USD" in state["assistant_message"]
 
@@ -244,17 +276,17 @@ def test_workflow_runs_interview_and_reanalyzes_pending_limit() -> None:
 
 
 def test_workflow_completes_direct_interview_without_pending_limit() -> None:
-    workflow = make_workflow()
+    workflow = make_workflow(intent_interpreter=LlmIntentInterpreterStub())
     state = workflow.start()
     for message in (
         "00000000000",
         "20/05/1990",
         "entrevista financeira",
-        "10000",
-        "formal",
-        "1000",
-        "0",
-        "não",
+        "recebo dez mil por mês",
+        "trabalho registrado",
+        "gasto mil reais por mês",
+        "ninguém depende de mim",
+        "não tenho dívidas",
     ):
         state = workflow.respond(state, message)
 

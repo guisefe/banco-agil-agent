@@ -11,8 +11,8 @@ from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRe
 from app.repositories.customers import CsvCustomerRepository
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
 from app.services.intent import (
+    ConversationInterpreter,
     DeterministicIntentInterpreter,
-    IntentInterpreter,
     OpenAICompatibleIntentInterpreter,
     ResilientIntentInterpreter,
 )
@@ -30,7 +30,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
     deterministic_interpreter = DeterministicIntentInterpreter()
-    intent_interpreter: IntentInterpreter
+    intent_interpreter: ConversationInterpreter
     if resolved_settings.llm_api_key is None:
         intent_interpreter = deterministic_interpreter
     else:
@@ -54,11 +54,14 @@ def build_application(*, settings: Settings | None = None) -> Application:
         request_repository=CsvCreditRequestRepository(resolved_settings.credit_request_file),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
+        field_interpreter=intent_interpreter,
+        intent_interpreter=intent_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
+        field_interpreter=intent_interpreter,
     )
     exchange_agent = ExchangeAgent(
         exchange_repository=AwesomeApiExchangeRateRepository(
@@ -66,6 +69,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         ),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
+        field_interpreter=intent_interpreter,
     )
     return Application(
         workflow=ConversationWorkflow(

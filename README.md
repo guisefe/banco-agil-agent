@@ -90,14 +90,17 @@ Depois da autenticação, a LLM recebe a mensagem e devolve JSON com:
 - intenção dentro de uma lista fechada;
 - moeda, quando o pedido é de câmbio;
 - novo limite total, quando informado pelo cliente.
+- respostas normalizadas da entrevista, como emprego, renda, despesas e dependentes;
+- respostas equivalentes a sim ou não durante os handoffs.
 
 Assim, uma frase como “preciso de um fôlego de quatro mil no cartão” pode ser entendida e
 avaliada no mesmo turno. A saída passa por validação antes de entrar no estado. Timeout, falha
 HTTP ou JSON inválido acionam o classificador local.
 
 A LLM não recebe CPF ou data de nascimento: esses padrões são substituídos antes da chamada.
-Ela também não participa da entrevista financeira, não calcula score e não aprova crédito.
-Quando habilitada, o texto do pedido — inclusive um valor citado — é enviado ao provedor; essa
+Na entrevista, ela apenas converte linguagem livre para o formato esperado; o código valida os
+campos, calcula o score e decide o crédito. Quando habilitada, o texto do pedido e as respostas
+financeiras podem ser enviados ao provedor; essa exposição deve ser revista antes de uso real e
 é uma limitação conhecida deste MVP.
 
 ## Regras de crédito
@@ -199,7 +202,7 @@ carregado automaticamente.
 A barra lateral mostra o estado da integração:
 
 - `LLM configurada — aguardando mensagem`: a chave foi encontrada, mas ainda não houve chamada;
-- `LLM ativa`: a última intenção foi interpretada pelo modelo;
+- `LLM ativa`: a última entrada conversacional foi interpretada pelo modelo;
 - `LLM falhou — fallback ativo`: a chamada falhou e o classificador local assumiu o turno;
 - `fallback local`: nenhuma chave foi encontrada ao iniciar a aplicação.
 

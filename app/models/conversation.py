@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Literal, TypedDict
 from uuid import uuid4
 
-from app.models.intent import IntentName, SupportedCurrency
+from app.models.intent import IntentName, IntentSource, SupportedCurrency
 from app.models.interview import EmploymentType
 
 AgentName = Literal[
@@ -64,6 +64,7 @@ class ConversationState(TypedDict):
     interpreted_intent: IntentName | None
     interpreted_currency: SupportedCurrency | None
     interpreted_requested_limit: Decimal | None
+    last_intent_source: IntentSource | None
     interview_stage: InterviewStage
     monthly_income: Decimal | None
     employment_type: EmploymentType | None
@@ -95,6 +96,7 @@ def initial_state() -> ConversationState:
         "interpreted_intent": None,
         "interpreted_currency": None,
         "interpreted_requested_limit": None,
+        "last_intent_source": None,
         "interview_stage": "awaiting_income",
         "monthly_income": None,
         "employment_type": None,

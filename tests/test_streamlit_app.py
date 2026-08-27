@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 from app.graph.workflow import ConversationWorkflow
 from app.models.exchange import ExchangeQuote
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
+from app.services.intent import IntentInterpretationError, OpenAICompatibleIntentInterpreter
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -37,12 +38,26 @@ def test_streamlit_app_starts_triage_without_exceptions(
 def test_streamlit_app_shows_when_llm_mode_is_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def fail_interpretation(
+        interpreter: OpenAICompatibleIntentInterpreter,
+        message: str,
+    ) -> None:
+        raise IntentInterpretationError("simulated provider failure")
+
     monkeypatch.setenv("GROQ_API_KEY", "test-only-key")
+    monkeypatch.setattr(OpenAICompatibleIntentInterpreter, "interpret", fail_interpretation)
 
     app = make_app_test().run()
 
     assert not app.exception
-    assert any("LLM + fallback seguro" in item.value for item in app.markdown)
+    assert any("LLM configurada" in item.value for item in app.markdown)
+
+    app.chat_input[0].set_value("00000000000").run()
+    app.chat_input[0].set_value("20/05/1990").run()
+    app.chat_input[0].set_value("quero saber meu score").run()
+
+    assert not app.exception
+    assert any("LLM falhou" in item.value for item in app.markdown)
 
 
 def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:

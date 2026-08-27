@@ -68,7 +68,7 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
 
     interpreter = OpenAICompatibleIntentInterpreter(
         api_key="test-secret",
-        base_url="https://llm.example/v1/",
+        base_url="https://api.groq.com/openai/v1/",
         model="test-model",
         transport=httpx.MockTransport(handler),
     )
@@ -83,10 +83,13 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
         requested_limit=Decimal("5000.00"),
     )
     assert captured_request is not None
-    assert str(captured_request.url) == "https://llm.example/v1/chat/completions"
+    assert str(captured_request.url) == "https://api.groq.com/openai/v1/chat/completions"
     assert captured_request.headers["authorization"] == "Bearer test-secret"
     request_body = json.loads(captured_request.content)
     assert request_body["temperature"] == 0
+    assert request_body["max_completion_tokens"] == 256
+    assert request_body["reasoning_effort"] == "low"
+    assert request_body["include_reasoning"] is False
     assert request_body["response_format"] == {"type": "json_object"}
     assert "Nunca autentique" in request_body["messages"][0]["content"]
     sent_message = request_body["messages"][1]["content"]

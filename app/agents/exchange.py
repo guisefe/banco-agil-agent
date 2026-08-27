@@ -54,6 +54,7 @@ class ExchangeAgent:
         currency = next_state["interpreted_currency"] or _identify_currency(user_message)
         next_state["interpreted_intent"] = None
         next_state["interpreted_currency"] = None
+        next_state["interpreted_requested_limit"] = None
         if currency is None:
             next_state["assistant_message"] = (
                 "Informe uma moeda suportada: dólar (USD), euro (EUR), peso argentino "

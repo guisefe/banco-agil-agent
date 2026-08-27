@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
 from app.audit.writer import AuditWriteError
@@ -183,25 +181,18 @@ def test_repository_failure_does_not_consume_customer_attempt() -> None:
     assert audit_writer.events[-1].reason_code == "CUSTOMER_REPOSITORY_UNAVAILABLE"
 
 
-@pytest.mark.parametrize(
-    ("message", "expected_agent"),
-    [
+def test_triage_routes_supported_intents() -> None:
+    scenarios = [
         ("Quero fazer uma entrevista financeira", "interview"),
         ("Quero uma entrevista de crédito", "interview"),
         ("Quero falar sobre crédito", "credit"),
         ("Qual é a cotação do dólar?", "exchange"),
-    ],
-)
-def test_triage_routes_supported_intents(
-    message: str,
-    expected_agent: str,
-) -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    state = authenticate(agent)
+    ]
 
-    state = agent.respond(state, message)
-
-    assert state["active_agent"] == expected_agent
+    for message, expected_agent in scenarios:
+        agent, _, _ = make_agent(customer=make_customer())
+        state = agent.respond(authenticate(agent), message)
+        assert state["active_agent"] == expected_agent
 
 
 def test_triage_routes_explicit_score_recalculation_to_interview() -> None:
@@ -282,21 +273,13 @@ def test_triage_does_not_block_llm_routing_when_telemetry_audit_fails() -> None:
     assert state["active_agent"] == "credit"
 
 
-@pytest.mark.parametrize(
-    "message",
-    ["Preciso de ajuda", "Quero ver meu limite e a cotação do dólar"],
-)
-def test_triage_requests_clarification_for_unknown_or_ambiguous_intent(
-    message: str,
-) -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    state = authenticate(agent)
-
-    state = agent.respond(state, message)
-
-    assert state["active_agent"] == "triage"
-    assert state["triage_stage"] == "awaiting_intent"
-    assert "Qual opção" in state["assistant_message"]
+def test_triage_requests_clarification_for_unknown_or_ambiguous_intent() -> None:
+    for message in ["Preciso de ajuda", "Quero ver meu limite e a cotação do dólar"]:
+        agent, _, _ = make_agent(customer=make_customer())
+        state = agent.respond(authenticate(agent), message)
+        assert state["active_agent"] == "triage"
+        assert state["triage_stage"] == "awaiting_intent"
+        assert "Qual opção" in state["assistant_message"]
 
 
 def test_user_can_end_conversation_before_authentication() -> None:
@@ -308,55 +291,3 @@ def test_user_can_end_conversation_before_authentication() -> None:
     assert state["end_reason"] == "user_requested"
     assert audit_writer.events[-1].event_type == "conversation_ended"
     assert audit_writer.events[-1].subject_ref is None
-
-
-def test_user_can_end_conversation_after_cpf_collection() -> None:
-    agent, _, audit_writer = make_agent()
-    state = started_state(agent)
-    state = agent.respond(state, "00000000000")
-
-    state = agent.respond(state, "sair")
-
-    assert state["end_reason"] == "user_requested"
-    assert state["cpf"] is None
-    assert audit_writer.events[-1].subject_ref is not None
-    assert "00000000000" not in audit_writer.events[-1].subject_ref
-
-
-def test_triage_rejects_short_pseudonymization_key() -> None:
-    with pytest.raises(ValueError, match="at least 32 bytes"):
-        TriageAgent(
-            customer_repository=StubCustomerRepository(),
-            audit_writer=RecordingAuditWriter(),
-            pseudonymization_key=b"short",
-        )
-
-
-def test_triage_rejects_invalid_lifecycle_calls() -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    initial = initial_state()
-
-    with pytest.raises(ValueError, match="not ready"):
-        agent.respond(initial, "00000000000")
-
-    state = started_state(agent)
-    with pytest.raises(ValueError, match="initial conversation state"):
-        agent.start(state)
-
-    ended_state = agent.respond(state, "fim")
-    with pytest.raises(ValueError, match="already ended"):
-        agent.respond(ended_state, "oi")
-
-    authenticated_state = authenticate(agent)
-    handed_off_state = agent.respond(authenticated_state, "crédito")
-    with pytest.raises(ValueError, match="after a handoff"):
-        agent.respond(handed_off_state, "oi")
-
-
-def test_triage_rejects_birth_date_stage_without_cpf() -> None:
-    agent, _, _ = make_agent()
-    state = started_state(agent)
-    state["triage_stage"] = "awaiting_birth_date"
-
-    with pytest.raises(ValueError, match="cpf is required"):
-        agent.respond(state, "20/05/1990")

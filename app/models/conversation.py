@@ -63,6 +63,7 @@ class ConversationState(TypedDict):
     handoff_pending: bool
     interpreted_intent: IntentName | None
     interpreted_currency: SupportedCurrency | None
+    interpreted_requested_limit: Decimal | None
     interview_stage: InterviewStage
     monthly_income: Decimal | None
     employment_type: EmploymentType | None
@@ -93,6 +94,7 @@ def initial_state() -> ConversationState:
         "handoff_pending": False,
         "interpreted_intent": None,
         "interpreted_currency": None,
+        "interpreted_requested_limit": None,
         "interview_stage": "awaiting_income",
         "monthly_income": None,
         "employment_type": None,

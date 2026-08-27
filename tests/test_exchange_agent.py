@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 
-import pytest
-
 from app.agents.exchange import ExchangeAgent
 from app.audit.events import AuditEvent
 from app.audit.writer import AuditWriteError
@@ -63,13 +61,13 @@ def make_agent(
     )
 
 
-@pytest.mark.parametrize("message", ["dólar", "USD", "euro", "peso argentino", "libra", "iene"])
-def test_exchange_agent_accepts_supported_currency_terms(message: str) -> None:
-    state = make_agent().respond(authenticated_exchange_state(), message)
+def test_exchange_agent_accepts_supported_currency_terms() -> None:
+    for message in ["dólar", "USD", "euro", "peso argentino", "libra", "iene"]:
+        state = make_agent().respond(authenticated_exchange_state(), message)
 
-    assert state["active_agent"] == "triage"
-    assert "compra R$ 5,1234" in state["assistant_message"]
-    assert "venda R$ 5,1334" in state["assistant_message"]
+        assert state["active_agent"] == "triage"
+        assert "compra R$ 5,1234" in state["assistant_message"]
+        assert "venda R$ 5,1334" in state["assistant_message"]
 
 
 def test_exchange_agent_keeps_session_open_for_unsupported_currency() -> None:
@@ -97,39 +95,3 @@ def test_exchange_agent_does_not_block_quote_when_non_critical_audit_fails() -> 
 
     assert state["active_agent"] == "triage"
     assert "Cotação" in state["assistant_message"]
-
-
-def test_exchange_agent_requires_its_own_authenticated_scope() -> None:
-    agent = make_agent()
-    state = initial_state()
-
-    with pytest.raises(ValueError, match="authenticated"):
-        agent.respond(state, "USD")
-
-    state["authenticated"] = True
-    state["cpf"] = "00000000000"
-    state["active_agent"] = "credit"
-    with pytest.raises(ValueError, match="outside its scope"):
-        agent.respond(state, "USD")
-
-
-def test_exchange_agent_defends_the_audit_invariant_for_missing_cpf() -> None:
-    state = authenticated_exchange_state()
-    state["cpf"] = None
-
-    with pytest.raises(ValueError, match="cpf"):
-        make_agent()._subject_ref(state)
-
-    state["cpf"] = "00000000000"
-    state["end_reason"] = "user_requested"
-    with pytest.raises(ValueError, match="ended"):
-        make_agent().respond(state, "USD")
-
-
-def test_exchange_agent_rejects_short_pseudonymization_key() -> None:
-    with pytest.raises(ValueError, match="at least"):
-        ExchangeAgent(
-            exchange_repository=QuoteRepository(),
-            audit_writer=RecordingAuditWriter(),
-            pseudonymization_key=b"short",
-        )

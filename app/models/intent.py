@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 IntentName = Literal[
@@ -32,6 +33,7 @@ class IntentInterpretation:
     intent: IntentName
     source: IntentSource
     currency: SupportedCurrency | None = None
+    requested_limit: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.intent not in ALLOWED_INTENTS:
@@ -40,3 +42,10 @@ class IntentInterpretation:
             raise ValueError("currency is not supported")
         if self.currency is not None and self.intent != "exchange_quote":
             raise ValueError("currency is only valid for exchange quotes")
+        if self.requested_limit is not None:
+            if (
+                not self.requested_limit.is_finite()
+                or self.requested_limit <= 0
+                or self.intent != "credit_limit_increase"
+            ):
+                raise ValueError("requested_limit is only valid for a positive credit increase")

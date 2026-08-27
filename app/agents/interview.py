@@ -39,6 +39,7 @@ class CreditInterviewAgent:
         next_state["handoff_pending"] = False
         next_state["interpreted_intent"] = None
         next_state["interpreted_currency"] = None
+        next_state["interpreted_requested_limit"] = None
         next_state["interview_stage"] = "awaiting_income"
         next_state["assistant_message"] = (
             "Vamos calcular seu score interno com cinco informações. "

@@ -26,30 +26,28 @@ def test_score_policy_resolves_boundary_scores(tmp_path: Path) -> None:
     assert repository.maximum_limit_for(score=1000) == Decimal("10000.00")
 
 
-@pytest.mark.parametrize("score", [-1, 1001])
-def test_score_policy_rejects_out_of_range_score(tmp_path: Path, score: int) -> None:
+def test_score_policy_rejects_out_of_range_score(tmp_path: Path) -> None:
     repository = CsvScorePolicyRepository(tmp_path / "unused.csv")
 
-    with pytest.raises(CreditRepositoryError, match="between"):
-        repository.maximum_limit_for(score=score)
+    for score in [-1, 1001]:
+        with pytest.raises(CreditRepositoryError, match="between"):
+            repository.maximum_limit_for(score=score)
 
 
-@pytest.mark.parametrize(
-    "content",
-    [
+def test_score_policy_reports_invalid_data(tmp_path: Path) -> None:
+    invalid_contents = [
         "",
         "score_minimo,score_maximo\n0,1000\n",
         "score_minimo,score_maximo,limite_maximo\ninvalid,1000,5000\n",
         "score_minimo,score_maximo,limite_maximo\n0,1000,Infinity\n",
-    ],
-)
-def test_score_policy_reports_invalid_data(tmp_path: Path, content: str) -> None:
-    path = tmp_path / "score_limite.csv"
-    path.write_text(content, encoding="utf-8")
-    repository = CsvScorePolicyRepository(path)
+    ]
 
-    with pytest.raises(CreditRepositoryError):
-        repository.maximum_limit_for(score=650)
+    for content in invalid_contents:
+        path = tmp_path / "score_limite.csv"
+        path.write_text(content, encoding="utf-8")
+        repository = CsvScorePolicyRepository(path)
+        with pytest.raises(CreditRepositoryError):
+            repository.maximum_limit_for(score=650)
 
 
 def test_score_policy_requires_exactly_one_matching_band(tmp_path: Path) -> None:

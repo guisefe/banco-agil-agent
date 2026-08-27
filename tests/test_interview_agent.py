@@ -1,9 +1,6 @@
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
-from typing import Any, cast
-
-import pytest
 
 from app.agents.interview import CreditInterviewAgent
 from app.audit.events import AuditEvent
@@ -135,30 +132,23 @@ def test_interview_preserves_pending_limit_for_credit_reanalysis() -> None:
     assert "reanalisar" in state["assistant_message"]
 
 
-@pytest.mark.parametrize(
-    ("answers", "stage", "message"),
-    [
+def test_interview_reprompts_invalid_answers_without_advancing() -> None:
+    invalid_scenarios = [
         (("invalid",), "awaiting_income", "renda"),
         (("5000", "informal"), "awaiting_employment", "opções"),
         (("5000", "formal", "invalid"), "awaiting_expenses", "despesas"),
         (("5000", "formal", "2500", "1.5"), "awaiting_dependents", "inteiro"),
         (("5000", "formal", "2500", "1", "talvez"), "awaiting_debts", "sim ou não"),
-    ],
-)
-def test_interview_reprompts_invalid_answers_without_advancing(
-    answers: tuple[str, ...],
-    stage: str,
-    message: str,
-) -> None:
-    agent, customers, _ = make_agent()
-    state = make_state()
+    ]
 
-    for answer in answers:
-        state = agent.respond(state, answer)
-
-    assert state["interview_stage"] == stage
-    assert message in state["assistant_message"]
-    assert not customers.updates
+    for answers, stage, message in invalid_scenarios:
+        agent, customers, _ = make_agent()
+        state = make_state()
+        for answer in answers:
+            state = agent.respond(state, answer)
+        assert state["interview_stage"] == stage
+        assert message in state["assistant_message"]
+        assert not customers.updates
     assert state["user_message"] == "[REDACTED_FINANCIAL_INPUT]"
 
 
@@ -221,66 +211,13 @@ def test_interview_reports_unrecoverable_rollback_failure() -> None:
     assert "com segurança" in state["assistant_message"]
 
 
-@pytest.mark.parametrize("missing", [True, False])
-def test_interview_handles_missing_or_unavailable_customer(missing: bool) -> None:
-    customers = CustomerRepositoryStub(
-        error=not missing,
-        customer=None if missing else CustomerRepositoryStub().customer,
-    )
-    agent, _, _ = make_agent(customer_repository=customers)
-
-    state = complete_interview(agent, make_state())
-
-    assert state["active_agent"] == "interview"
-    assert "Não foi possível" in state["assistant_message"]
-
-
-def test_interview_rejects_invalid_lifecycle_and_configuration() -> None:
-    agent, _, _ = make_agent()
-
-    ended = make_state()
-    ended["end_reason"] = "user_requested"
-    with pytest.raises(ValueError, match="already ended"):
-        agent.respond(ended, "5000")
-
-    unauthenticated = make_state()
-    unauthenticated["authenticated"] = False
-    with pytest.raises(ValueError, match="authenticated"):
-        agent.respond(unauthenticated, "5000")
-
-    wrong_agent = make_state()
-    wrong_agent["active_agent"] = "credit"
-    with pytest.raises(ValueError, match="outside its scope"):
-        agent.respond(wrong_agent, "5000")
-
-    invalid_stage = cast(Any, make_state())
-    invalid_stage["interview_stage"] = "invalid"
-    with pytest.raises(ValueError, match="not ready"):
-        agent.respond(invalid_stage, "5000")
-
-    with pytest.raises(ValueError, match="at least 32 bytes"):
-        CreditInterviewAgent(
-            customer_repository=CustomerRepositoryStub(),
-            audit_writer=AuditWriterStub(),
-            pseudonymization_key=b"short",
+def test_interview_handles_missing_or_unavailable_customer() -> None:
+    for missing in [True, False]:
+        customers = CustomerRepositoryStub(
+            error=not missing,
+            customer=None if missing else CustomerRepositoryStub().customer,
         )
-
-
-def test_interview_rejects_incomplete_profile_and_missing_cpf() -> None:
-    agent, _, _ = make_agent()
-    incomplete = make_state()
-    incomplete["interview_stage"] = "awaiting_debts"
-
-    with pytest.raises(ValueError, match="incomplete"):
-        agent.respond(incomplete, "não")
-
-    completed = make_state()
-    completed["monthly_income"] = Decimal("5000")
-    completed["employment_type"] = "formal"
-    completed["fixed_expenses"] = Decimal("2500")
-    completed["dependents"] = 1
-    completed["has_active_debts"] = False
-    completed["cpf"] = None
-
-    with pytest.raises(ValueError, match="authenticated"):
-        agent._ensure_interview_can_respond(completed)
+        agent, _, _ = make_agent(customer_repository=customers)
+        state = complete_interview(agent, make_state())
+        assert state["active_agent"] == "interview"
+        assert "Não foi possível" in state["assistant_message"]

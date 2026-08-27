@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Literal
 
 import pytest
 
@@ -10,6 +11,7 @@ from app.agents.interview import CreditInterviewAgent
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
 from app.graph.workflow import ConversationWorkflow
+from app.models.conversation import initial_state
 from app.models.credit import CreditRequest
 from app.models.customer import Customer
 from app.models.exchange import ExchangeQuote
@@ -50,7 +52,7 @@ class CustomerRepositoryStub:
             raise CustomerRepositoryError("not found")
         self.customer = replace(self.customer, credit_limit=credit_limit)
 
-    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
+    def update_credit_score(self, *, cpf: str, credit_score: int | None) -> None:
         if cpf != self.customer.cpf:
             raise CustomerRepositoryError("not found")
         self.customer = replace(self.customer, credit_score=credit_score)
@@ -69,6 +71,23 @@ class CreditRequestRepositoryStub:
 
     def append(self, request: CreditRequest) -> None:
         self.requests.append(request)
+
+    def finalize_pending(
+        self,
+        *,
+        customer_cpf: str,
+        requested_at: datetime,
+        status: Literal["aprovado", "rejeitado"],
+    ) -> None:
+        for index, request in enumerate(self.requests):
+            if (
+                request.customer_cpf == customer_cpf
+                and request.requested_at == requested_at
+                and request.status == "pendente"
+            ):
+                self.requests[index] = replace(request, status=status)
+                return
+        raise CreditRepositoryError("pending request unavailable")
 
 
 class ExchangeRepositoryStub:
@@ -125,12 +144,8 @@ def test_workflow_runs_triage_turns_through_langgraph() -> None:
     state = workflow.respond(state, "Quero consultar meu limite")
 
     assert state["authenticated"] is True
-    assert state["active_agent"] == "credit"
-    assert state["turn_number"] == 3
-
-    state = workflow.respond(state, "consultar limite atual")
-
     assert state["active_agent"] == "triage"
+    assert state["turn_number"] == 3
     assert "R$ 2.500,00" in state["assistant_message"]
 
 
@@ -141,10 +156,40 @@ def test_workflow_runs_exchange_quote_and_returns_to_triage() -> None:
     state = workflow.respond(state, "20/05/1990")
     state = workflow.respond(state, "cotação do dólar")
 
-    state = workflow.respond(state, "USD")
-
     assert state["active_agent"] == "triage"
     assert "Cotação de USD" in state["assistant_message"]
+
+
+def test_workflow_answers_score_query_in_same_turn_as_triage_handoff() -> None:
+    workflow = make_workflow()
+    state = workflow.start()
+    state = workflow.respond(state, "00000000000")
+    state = workflow.respond(state, "20/05/1990")
+
+    state = workflow.respond(state, "quero saber meu score")
+
+    assert state["turn_number"] == 3
+    assert state["active_agent"] == "triage"
+    assert "650 de 1000" in state["assistant_message"]
+
+
+def test_workflow_routes_existing_exchange_state_from_graph_start() -> None:
+    workflow = make_workflow()
+    state = initial_state()
+    state["authenticated"] = True
+    state["cpf"] = "00000000000"
+    state["active_agent"] = "exchange"
+
+    state = workflow.respond(state, "USD")
+
+    assert "Cotação de USD" in state["assistant_message"]
+
+
+def test_workflow_after_triage_fallback_is_end() -> None:
+    state = initial_state()
+    state["handoff_pending"] = True
+
+    assert ConversationWorkflow._route_after_triage(state) == "end"
 
 
 def test_workflow_runs_interview_and_reanalyzes_pending_limit() -> None:
@@ -154,7 +199,6 @@ def test_workflow_runs_interview_and_reanalyzes_pending_limit() -> None:
         "00000000000",
         "20/05/1990",
         "aumento de limite",
-        "aumentar",
         "6000",
         "sim",
         "10000",

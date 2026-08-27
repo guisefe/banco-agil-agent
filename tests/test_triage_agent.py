@@ -196,6 +196,15 @@ def test_triage_routes_supported_intents(
     assert state["active_agent"] == expected_agent
 
 
+def test_triage_routes_explicit_score_recalculation_to_interview() -> None:
+    agent, _, _ = make_agent(customer=make_customer())
+    state = authenticate(agent)
+
+    state = agent.respond(state, "quero recalcular score")
+
+    assert state["active_agent"] == "interview"
+
+
 @pytest.mark.parametrize(
     "message",
     ["Preciso de ajuda", "Quero ver meu limite e a cotação do dólar"],

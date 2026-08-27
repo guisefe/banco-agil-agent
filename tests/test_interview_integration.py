@@ -9,11 +9,15 @@ from app.models.conversation import ConversationState
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 
 
-def build_test_application(tmp_path: Path) -> tuple[Application, Settings]:
+def build_test_application(
+    tmp_path: Path,
+    *,
+    initial_score: str = "650",
+) -> tuple[Application, Settings]:
     customer_file = tmp_path / "clientes.csv"
     customer_file.write_text(
         "cpf,nome,data_nascimento,limite_credito,score\n"
-        "00000000000,Ana Exemplo,1990-05-20,2500.00,650\n",
+        f"00000000000,Ana Exemplo,1990-05-20,2500.00,{initial_score}\n",
         encoding="utf-8",
     )
     score_policy_file = tmp_path / "score_limite.csv"
@@ -53,7 +57,6 @@ def test_interview_updates_score_and_approves_original_request(tmp_path: Path) -
             "00000000000",
             "20/05/1990",
             "aumento de limite",
-            "aumentar",
             "6000",
             "sim",
             "10000",
@@ -112,3 +115,34 @@ def test_direct_interview_returns_to_credit_without_creating_request(tmp_path: P
     assert state["active_agent"] == "credit"
     assert "score foi recalculado" in state["assistant_message"]
     assert not settings.credit_request_file.exists()
+
+
+def test_missing_score_request_is_finalized_after_interview(tmp_path: Path) -> None:
+    application, settings = build_test_application(tmp_path, initial_score="")
+
+    state = send_messages(
+        application,
+        (
+            "00000000000",
+            "20/05/1990",
+            "quero aumentar meu limite",
+            "6000",
+            "sim",
+            "10000",
+            "formal",
+            "1000",
+            "0",
+            "não",
+        ),
+    )
+
+    assert state["active_agent"] == "triage"
+    assert "aprovada" in state["assistant_message"]
+    with settings.customer_file.open(newline="", encoding="utf-8") as customer_file:
+        customer = next(csv.DictReader(customer_file))
+    assert 0 <= int(customer["score"]) <= 1000
+
+    with settings.credit_request_file.open(newline="", encoding="utf-8") as request_file:
+        requests = list(csv.DictReader(request_file))
+    assert len(requests) == 1
+    assert requests[0]["status_pedido"] == "aprovado"

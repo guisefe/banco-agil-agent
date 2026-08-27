@@ -14,8 +14,8 @@ MAX_AUTHENTICATION_ATTEMPTS = 3
 DestinationAgent = Literal["credit", "interview", "exchange"]
 
 _INTENT_TERMS: Mapping[DestinationAgent, frozenset[str]] = {
-    "credit": frozenset({"limite", "aumento de limite"}),
-    "interview": frozenset({"entrevista", "recalcular score"}),
+    "credit": frozenset({"limite", "aumento de limite", "consultar score", "meu score"}),
+    "interview": frozenset({"entrevista", "recalcular score", "atualizar score", "melhorar score"}),
     "exchange": frozenset({"cambio", "cotacao", "dolar", "euro", "moeda"}),
 }
 
@@ -225,6 +225,7 @@ class TriageAgent:
             return state
 
         state["active_agent"] = destination
+        state["handoff_pending"] = True
         state["assistant_message"] = _handoff_message(destination)
         self._append_event(
             AuditEvent(
@@ -277,12 +278,17 @@ class TriageAgent:
 
 def _identify_destination(message: str) -> DestinationAgent | None:
     normalized_message = normalize_text(message)
+    recalculation_terms = ("recalcular score", "atualizar score", "melhorar score")
+    if any(term in normalized_message for term in recalculation_terms):
+        return "interview"
     matches = {
         agent
         for agent, terms in _INTENT_TERMS.items()
         if any(term in normalized_message for term in terms)
     }
     if "credito" in normalized_message and "interview" not in matches:
+        matches.add("credit")
+    if "score" in normalized_message and "interview" not in matches:
         matches.add("credit")
     if len(matches) != 1:
         return None

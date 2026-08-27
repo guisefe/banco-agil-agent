@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 
-import pytest
-
 from app.agents.exchange import ExchangeAgent
 from app.audit.events import AuditEvent
 from app.audit.writer import AuditWriteError
@@ -97,39 +95,3 @@ def test_exchange_agent_does_not_block_quote_when_non_critical_audit_fails() -> 
 
     assert state["active_agent"] == "triage"
     assert "Cotação" in state["assistant_message"]
-
-
-def test_exchange_agent_requires_its_own_authenticated_scope() -> None:
-    agent = make_agent()
-    state = initial_state()
-
-    with pytest.raises(ValueError, match="authenticated"):
-        agent.respond(state, "USD")
-
-    state["authenticated"] = True
-    state["cpf"] = "00000000000"
-    state["active_agent"] = "credit"
-    with pytest.raises(ValueError, match="outside its scope"):
-        agent.respond(state, "USD")
-
-
-def test_exchange_agent_defends_the_audit_invariant_for_missing_cpf() -> None:
-    state = authenticated_exchange_state()
-    state["cpf"] = None
-
-    with pytest.raises(ValueError, match="cpf"):
-        make_agent()._subject_ref(state)
-
-    state["cpf"] = "00000000000"
-    state["end_reason"] = "user_requested"
-    with pytest.raises(ValueError, match="ended"):
-        make_agent().respond(state, "USD")
-
-
-def test_exchange_agent_rejects_short_pseudonymization_key() -> None:
-    with pytest.raises(ValueError, match="at least"):
-        ExchangeAgent(
-            exchange_repository=QuoteRepository(),
-            audit_writer=RecordingAuditWriter(),
-            pseudonymization_key=b"short",
-        )

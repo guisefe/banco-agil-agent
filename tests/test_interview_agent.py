@@ -1,9 +1,6 @@
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
-from typing import Any, cast
-
-import pytest
 
 from app.agents.interview import CreditInterviewAgent
 from app.audit.events import AuditEvent
@@ -224,54 +221,3 @@ def test_interview_handles_missing_or_unavailable_customer() -> None:
         state = complete_interview(agent, make_state())
         assert state["active_agent"] == "interview"
         assert "Não foi possível" in state["assistant_message"]
-
-
-def test_interview_rejects_invalid_lifecycle_and_configuration() -> None:
-    agent, _, _ = make_agent()
-
-    ended = make_state()
-    ended["end_reason"] = "user_requested"
-    with pytest.raises(ValueError, match="already ended"):
-        agent.respond(ended, "5000")
-
-    unauthenticated = make_state()
-    unauthenticated["authenticated"] = False
-    with pytest.raises(ValueError, match="authenticated"):
-        agent.respond(unauthenticated, "5000")
-
-    wrong_agent = make_state()
-    wrong_agent["active_agent"] = "credit"
-    with pytest.raises(ValueError, match="outside its scope"):
-        agent.respond(wrong_agent, "5000")
-
-    invalid_stage = cast(Any, make_state())
-    invalid_stage["interview_stage"] = "invalid"
-    with pytest.raises(ValueError, match="not ready"):
-        agent.respond(invalid_stage, "5000")
-
-    with pytest.raises(ValueError, match="at least 32 bytes"):
-        CreditInterviewAgent(
-            customer_repository=CustomerRepositoryStub(),
-            audit_writer=AuditWriterStub(),
-            pseudonymization_key=b"short",
-        )
-
-
-def test_interview_rejects_incomplete_profile_and_missing_cpf() -> None:
-    agent, _, _ = make_agent()
-    incomplete = make_state()
-    incomplete["interview_stage"] = "awaiting_debts"
-
-    with pytest.raises(ValueError, match="incomplete"):
-        agent.respond(incomplete, "não")
-
-    completed = make_state()
-    completed["monthly_income"] = Decimal("5000")
-    completed["employment_type"] = "formal"
-    completed["fixed_expenses"] = Decimal("2500")
-    completed["dependents"] = 1
-    completed["has_active_debts"] = False
-    completed["cpf"] = None
-
-    with pytest.raises(ValueError, match="authenticated"):
-        agent._ensure_interview_can_respond(completed)

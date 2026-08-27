@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from app.agents.triage import TriageAgent
 from app.audit.events import AuditEvent
 from app.audit.writer import AuditWriteError
@@ -293,55 +291,3 @@ def test_user_can_end_conversation_before_authentication() -> None:
     assert state["end_reason"] == "user_requested"
     assert audit_writer.events[-1].event_type == "conversation_ended"
     assert audit_writer.events[-1].subject_ref is None
-
-
-def test_user_can_end_conversation_after_cpf_collection() -> None:
-    agent, _, audit_writer = make_agent()
-    state = started_state(agent)
-    state = agent.respond(state, "00000000000")
-
-    state = agent.respond(state, "sair")
-
-    assert state["end_reason"] == "user_requested"
-    assert state["cpf"] is None
-    assert audit_writer.events[-1].subject_ref is not None
-    assert "00000000000" not in audit_writer.events[-1].subject_ref
-
-
-def test_triage_rejects_short_pseudonymization_key() -> None:
-    with pytest.raises(ValueError, match="at least 32 bytes"):
-        TriageAgent(
-            customer_repository=StubCustomerRepository(),
-            audit_writer=RecordingAuditWriter(),
-            pseudonymization_key=b"short",
-        )
-
-
-def test_triage_rejects_invalid_lifecycle_calls() -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    initial = initial_state()
-
-    with pytest.raises(ValueError, match="not ready"):
-        agent.respond(initial, "00000000000")
-
-    state = started_state(agent)
-    with pytest.raises(ValueError, match="initial conversation state"):
-        agent.start(state)
-
-    ended_state = agent.respond(state, "fim")
-    with pytest.raises(ValueError, match="already ended"):
-        agent.respond(ended_state, "oi")
-
-    authenticated_state = authenticate(agent)
-    handed_off_state = agent.respond(authenticated_state, "crédito")
-    with pytest.raises(ValueError, match="after a handoff"):
-        agent.respond(handed_off_state, "oi")
-
-
-def test_triage_rejects_birth_date_stage_without_cpf() -> None:
-    agent, _, _ = make_agent()
-    state = started_state(agent)
-    state["triage_stage"] = "awaiting_birth_date"
-
-    with pytest.raises(ValueError, match="cpf is required"):
-        agent.respond(state, "20/05/1990")

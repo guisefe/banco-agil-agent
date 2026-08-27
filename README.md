@@ -8,8 +8,9 @@ MVP de atendimento bancário conversacional com quatro agentes especializados, i
 Streamlit e orquestração por LangGraph. A solução cobre o fluxo completo do desafio técnico
 da Tech For Humans: autenticação, crédito, entrevista financeira, reanálise e câmbio.
 
-> **Entrega completa:** 268 testes, 100% de linhas e branches cobertos, MyPy strict, Ruff,
-> CI, auditoria pseudonimizada e container não-root com health check.
+> **Entrega completa:** 309 testes, 100% de linhas e branches cobertos, interpretação por
+> LLM com fallback determinístico, MyPy strict, Ruff, CI, auditoria pseudonimizada e
+> container não-root com health check.
 
 ## Visão Geral do Projeto
 
@@ -47,6 +48,9 @@ flowchart TD
     END -->|Sim| FIN[Ferramenta de encerramento]
     END -->|Não| TRI[Agente de Triagem]
     TRI --> AUTH[(clientes.csv)]
+    TRI --> INT[Interpretador híbrido]
+    INT --> LLM[LLM via API Groq]
+    INT --> FALLBACK[Fallback determinístico]
     TRI -->|Crédito| CRED[Agente de Crédito]
     TRI -->|Câmbio| FX[Agente de Câmbio]
     CRED --> SCORE[(score_limite.csv)]
@@ -64,6 +68,8 @@ flowchart TD
 - **Orquestração:** um grafo de estados controla turnos, autenticação, handoffs e
   encerramento.
 - **Agentes:** cada agente executa apenas ações pertencentes ao seu escopo.
+- **Interpretação híbrida:** depois da autenticação, uma LLM classifica mensagens livres em
+  um esquema fechado; timeout, falha ou saída inválida acionam o fallback determinístico.
 - **Ferramentas:** autenticação, leitura e escrita de CSV, cálculo de score, consulta de
   câmbio e encerramento são funções explícitas e testáveis.
 - **Auditoria:** eventos de negócio são registrados separadamente das mensagens e dos
@@ -127,6 +133,7 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 | Entrevista | Cinco perguntas, score versionado entre 0–1000 e compensação em falha. |
 | Câmbio | USD, EUR, ARS, GBP e JPY; timeout, retry de transporte e payload validado. |
 | Orquestração | LangGraph, estado tipado, escopos isolados e handoffs invisíveis. |
+| Inteligência | LLM para compreensão de intenção; saída JSON validada e fallback determinístico. |
 | Interface | Streamlit cobrindo os quatro agentes, com feedback de processamento, recuperação de falhas e mascaramento parcial. |
 | Auditoria | JSONL mínimo, motivos controlados e referência HMAC-SHA-256. |
 | Qualidade | Pytest, cobertura integral, Ruff, MyPy strict, CI e Dependabot. |
@@ -142,6 +149,7 @@ app/
 ├── repositories/    # Clientes, política de score e solicitações em CSV
 ├── tools/           # Identidade, valores monetários e encerramento
 ├── graph/           # Orquestração e roteamento entre agentes disponíveis
+├── services/        # Interpretação híbrida de intenção por LLM + fallback
 └── ui/              # Interface Streamlit e proteção de dados exibidos
 tests/               # Testes unitários e de integração
 docs/                # Decisões de arquitetura, privacidade e operação
@@ -189,10 +197,18 @@ vazio representa ausência de avaliação; `0` representa um score calculado vá
 
 ### Linguagem natural sem abrir mão do determinismo
 
-A compreensão de intenções usa um vocabulário explícito e testável. Frases como “quero saber
-meu score”, “qual meu limite”, “quero mais limite” e “cotação do dólar” são processadas no
-mesmo turno do handoff. Uma LLM continua fora de autenticação, score e aprovação. Em uma
-evolução, ela poderia classificar apenas mensagens ambíguas, com fallback determinístico.
+A compreensão de linguagem é híbrida. Depois da autenticação, a LLM classifica a mensagem
+em um conjunto fechado de intenções e pode extrair apenas uma moeda suportada. A resposta
+JSON é validada antes de entrar no estado. Timeout de três segundos, falha HTTP, JSON inválido,
+intenção proibida, moeda desconhecida ou campos inconsistentes acionam automaticamente o
+classificador determinístico.
+
+A mensagem é limitada a 1.000 caracteres e sequências numéricas são removidas antes da API.
+Ela é tratada como dado não confiável: o prompt impede a LLM de autenticar, calcular
+score, aprovar crédito ou obedecer instruções inseridas pelo cliente. CPF, nascimento e as
+cinco respostas financeiras nunca são enviados ao provedor, porque a chamada ocorre somente
+na etapa de intenção após autenticação. O evento de auditoria registra apenas se houve LLM ou
+fallback, nunca a mensagem ou a classificação completa.
 
 ### Integração externa resiliente
 
@@ -217,6 +233,8 @@ observabilidade, retenção formal e procedimentos operacionais.
 | `httpx` | Cliente HTTP com timeout explícito e transporte simulável nos testes. |
 | Estado tipado | Torna transições explícitas e reduz erros entre agentes. |
 | Regras determinísticas | Garante autenticação, score e crédito reproduzíveis e testáveis. |
+| LLM com JSON validado | Melhora a compreensão de linguagem sem controlar regras bancárias. |
+| Fallback determinístico | Mantém o atendimento disponível sem chave, em timeout ou saída inválida. |
 | Grafo de estados | Representa os handoffs e impede que agentes atuem fora do escopo. |
 | Streamlit | Permite construir rapidamente a UI simples solicitada no desafio. |
 | CSV por repositórios/ferramentas | Cumpre a especificação sem acoplar os agentes ao armazenamento. |
@@ -225,10 +243,11 @@ observabilidade, retenção formal e procedimentos operacionais.
 | GitHub Actions | Executa os mesmos controles em toda PR e na branch principal. |
 | Docker não-root | Empacota a demonstração sem executar a aplicação como administrador. |
 
-O MVP não depende de uma LLM. A interpretação necessária é deliberadamente determinística,
-adequada ao vocabulário fechado do desafio e executável sem credenciais pagas. Uma LLM
-poderia ser adicionada futuramente apenas para linguagem ambígua ou formulação de respostas,
-sempre com fallback determinístico e sem participar das regras críticas.
+O provedor padrão é a API compatível com OpenAI da Groq, usando
+[`openai/gpt-oss-20b`](https://console.groq.com/docs/models). URL e modelo são configuráveis,
+portanto o serviço pode ser trocado sem
+alterar os agentes. Sem chave, o modo local continua funcional para desenvolvimento e CI,
+mas a demonstração da capacidade de IA deve ser feita com `GROQ_API_KEY` configurada.
 
 ## Tutorial de Execução e Testes
 
@@ -253,6 +272,17 @@ por processo:
 ```bash
 export AUDIT_PSEUDONYMIZATION_KEY="substitua-por-um-segredo-com-32-bytes-ou-mais"
 ```
+
+Ative a interpretação por LLM usando uma chave da Groq. A chave nunca deve entrar no Git:
+
+```bash
+export GROQ_API_KEY="sua-chave-groq"
+export LLM_MODEL="openai/gpt-oss-20b"
+```
+
+Também são aceitos `LLM_API_KEY` e `LLM_BASE_URL` para outro endpoint compatível. A barra
+lateral mostra `LLM + fallback seguro` quando a configuração está ativa e `fallback local`
+quando não há chave.
 
 Opcionalmente, configure uma chave da AwesomeAPI fora do Git. A demonstração funciona sem
 ela quando o provedor permite a consulta pública:
@@ -282,6 +312,7 @@ health check no endpoint nativo do Streamlit:
 docker build -t banco-agil-agent .
 docker run --rm -p 8501:8501 \
   -e AUDIT_PSEUDONYMIZATION_KEY="substitua-por-um-segredo-com-32-bytes-ou-mais" \
+  -e GROQ_API_KEY="sua-chave-groq" \
   banco-agil-agent
 ```
 
@@ -318,16 +349,18 @@ adicionada ao repositório.
 3. Informe `20/05/1990`; o chat deve mostrar apenas `**/**/1990`.
 4. Escreva `quero saber meu score`; a resposta deve informar `650 de 1000` sem pedir que
    você repita a intenção.
-5. Escreva `quero aumentar meu limite`; informe `R$ 5.000,00`; o pedido deve ser aprovado,
+5. Com a LLM ativa, escreva `preciso de um fôlego maior no cartão`; a resposta deve perguntar
+   diretamente o novo limite total. A frase não pertence ao vocabulário bancário rígido.
+6. Escreva `quero aumentar meu limite`; informe `R$ 5.000,00`; o pedido deve ser aprovado,
    o limite atualizado e uma linha adicionada ao CSV de solicitações.
-6. Inicie uma nova conversa com Mariana Souza e peça `quero limite de 6000`; como o score
+7. Inicie uma nova conversa com Mariana Souza e peça `quero limite de 6000`; como o score
    está vazio, o pedido deve ficar `pendente` e a entrevista deve ser oferecida.
-7. Aceite e responda, por exemplo: renda `10000`, emprego `formal`, despesas `1000`,
+8. Aceite e responda, por exemplo: renda `10000`, emprego `formal`, despesas `1000`,
    dependentes `0`, dívidas `não`. O score deve permanecer entre 0 e 1000 e o mesmo pedido
    deve ser reanalisado, sem criar duas solicitações.
-8. Peça `cotação do dólar`; uma resposta válida deve chegar no mesmo turno ou uma mensagem
+9. Peça `cotação do dólar`; uma resposta válida deve chegar no mesmo turno ou uma mensagem
    controlada deve informar a indisponibilidade do provedor.
-9. Em qualquer etapa, escreva `encerrar`; o campo de entrada deve ser desabilitado e o botão
+10. Em qualquer etapa, escreva `encerrar`; o campo de entrada deve ser desabilitado e o botão
    **Nova conversa** deve iniciar uma sessão limpa.
 
 > Os testes manuais alteram os CSVs. Para repetir a demonstração, restaure os três arquivos

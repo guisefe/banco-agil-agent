@@ -5,10 +5,19 @@ from app.ui.privacy import safe_user_message_for_display
 def test_ui_masks_cpf_and_birth_date() -> None:
     state = initial_state()
     state["triage_stage"] = "awaiting_cpf"
-    assert "00000000000" not in safe_user_message_for_display(state, "00000000000")
+    assert safe_user_message_for_display(state, "00000000000").endswith("***.***.***-00")
 
     state["triage_stage"] = "awaiting_birth_date"
-    assert "20/05/1990" not in safe_user_message_for_display(state, "20/05/1990")
+    assert safe_user_message_for_display(state, "20/05/1990").endswith("**/**/1990")
+
+
+def test_ui_uses_full_mask_when_identity_input_is_invalid() -> None:
+    state = initial_state()
+    state["triage_stage"] = "awaiting_cpf"
+    assert safe_user_message_for_display(state, "123").endswith("***.***.***-**")
+
+    state["triage_stage"] = "awaiting_birth_date"
+    assert safe_user_message_for_display(state, "data inválida").endswith("**/**/****")
 
 
 def test_ui_preserves_regular_and_end_messages() -> None:

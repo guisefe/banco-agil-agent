@@ -56,9 +56,22 @@ def render_app() -> None:
     if user_message:
         safe_message = safe_user_message_for_display(state, user_message)
         messages.append({"role": "user", "content": safe_message})
-        next_state = application.workflow.respond(state, user_message)
-        messages.append({"role": "assistant", "content": next_state["assistant_message"]})
-        st.session_state[_STATE_KEY] = next_state
+        try:
+            with st.spinner("Processando sua solicitação..."):
+                next_state = application.workflow.respond(state, user_message)
+        except Exception:  # noqa: BLE001 - final UI boundary keeps the session recoverable
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": (
+                        "Tive uma falha inesperada, mas sua sessão continua ativa. "
+                        "Tente novamente; se persistir, inicie uma nova conversa."
+                    ),
+                }
+            )
+        else:
+            messages.append({"role": "assistant", "content": next_state["assistant_message"]})
+            st.session_state[_STATE_KEY] = next_state
         st.session_state[_MESSAGES_KEY] = messages
         st.rerun()
 

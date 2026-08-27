@@ -38,6 +38,27 @@ the CPF keeps only its last two digits and the birth date keeps only the year. R
 remain available to the authentication operation but are not copied into chat history,
 technical logs, or audit events.
 
+## LLM data boundary
+
+The LLM is a non-critical intent classifier, not a banking decision maker. It is called only
+after successful authentication while Triagem is waiting for a new subject. CPF, birth date,
+customer name, current limit, score, requested amount, income, employment, expenses,
+dependents, and debt answers are never added to its prompt.
+
+The provider receives only the current free-form intent message, truncated to 1,000
+characters after numeric sequences are replaced with `[NUMBER]`. Its output must match a
+closed JSON schema containing one allowed intent and, for exchange only, one supported
+currency. A timeout, HTTP failure, invalid JSON, forbidden intent, unsupported currency, or
+inconsistent field combination activates the deterministic fallback. Prompt instructions
+explicitly treat the customer message as untrusted data and prohibit authentication, score
+calculation, and credit approval.
+
+Audit records only whether interpretation used the LLM or the fallback and the policy version.
+It does not record the prompt, response, message, inferred intent, provider payload, or API key.
+For real personal data, the controller would still need a lawful basis, provider assessment,
+contractual safeguards, international-transfer analysis where applicable, retention controls,
+and a documented data-flow inventory.
+
 `subject_ref` is produced with HMAC-SHA-256 and a secret key of at least 32 bytes. The key
 must come from a secret manager or protected environment variable and must never be stored
 in Git. HMAC pseudonymization reduces exposure, but it is not anonymization: the reference

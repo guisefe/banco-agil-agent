@@ -12,8 +12,10 @@ from app.audit.writer import AuditWriteError
 from app.models.conversation import ConversationState, initial_state
 from app.models.credit import CreditRequest
 from app.models.customer import Customer
+from app.models.intent import IntentInterpretation
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
+from app.services.intent import IntentInterpreter
 
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 
@@ -117,6 +119,14 @@ class AuditWriterStub:
         self.events.append(event)
 
 
+@dataclass
+class IntentInterpreterStub:
+    result: IntentInterpretation
+
+    def interpret(self, message: str) -> IntentInterpretation:
+        return self.result
+
+
 def make_customer() -> Customer:
     return Customer(
         cpf="00000000000",
@@ -144,6 +154,7 @@ def make_agent(
     score_policy_repository: ScorePolicyRepositoryStub | None = None,
     request_repository: CreditRequestRepositoryStub | None = None,
     audit_writer: AuditWriterStub | None = None,
+    intent_interpreter: IntentInterpreter | None = None,
 ) -> tuple[
     CreditAgent,
     CustomerRepositoryStub,
@@ -161,6 +172,7 @@ def make_agent(
         request_repository=requests,
         audit_writer=audit,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        intent_interpreter=intent_interpreter,
     )
     return agent, customers, policy, requests, audit
 
@@ -213,6 +225,20 @@ def test_credit_agent_clarifies_unknown_or_ambiguous_action() -> None:
         state = agent.respond(make_state(), message)
         assert state["active_agent"] == "credit"
         assert "consultar" in state["assistant_message"]
+
+    agent, customers, _, _, _ = make_agent(
+        intent_interpreter=IntentInterpreterStub(
+            IntentInterpretation(
+                intent="credit_limit_increase",
+                source="llm",
+                requested_limit=Decimal("4000.00"),
+            )
+        )
+    )
+    state = agent.respond(make_state(), "preciso de um fôlego de quatro mil")
+    assert state["last_intent_source"] == "llm"
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("4000.00")
 
 
 def test_credit_agent_collects_requested_limit() -> None:

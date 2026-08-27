@@ -93,10 +93,13 @@ class DeterministicIntentInterpreter:
             "limite maior",
             "folego maior",
         )
-        if any(term in normalized for term in increase_terms) or (
+        has_increase_request = any(term in normalized for term in increase_terms) or (
             "limite" in normalized and any(character.isdigit() for character in normalized)
-        ):
+        )
+        if has_increase_request:
             intents.add("credit_limit_increase")
+            if any(term in normalized for term in ("consultar", "consulta")):
+                intents.add("credit_limit_query")
         elif "limite" in normalized:
             intents.add("credit_limit_query")
         elif "credito" in normalized and "credit_interview" not in intents:

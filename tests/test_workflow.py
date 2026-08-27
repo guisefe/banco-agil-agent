@@ -120,6 +120,7 @@ def make_workflow(
         request_repository=CreditRequestRepositoryStub(),
         audit_writer=audit_writer,
         pseudonymization_key=PSEUDONYMIZATION_KEY,
+        intent_interpreter=intent_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,

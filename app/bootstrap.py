@@ -54,6 +54,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         request_repository=CsvCreditRequestRepository(resolved_settings.credit_request_file),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
+        intent_interpreter=intent_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,

@@ -18,6 +18,7 @@ from app.repositories.credit import (
     ScorePolicyRepository,
 )
 from app.repositories.customers import CreditCustomerRepository, CustomerRepositoryError
+from app.services.intent import DeterministicIntentInterpreter, IntentInterpreter
 from app.tools.conversation import normalize_text
 from app.tools.money import format_brl, parse_money
 
@@ -46,6 +47,7 @@ class CreditAgent:
         request_repository: CreditRequestRepository,
         audit_writer: AuditWriter,
         pseudonymization_key: bytes,
+        intent_interpreter: IntentInterpreter | None = None,
     ) -> None:
         if len(pseudonymization_key) < MIN_PSEUDONYMIZATION_KEY_BYTES:
             raise ValueError(
@@ -56,6 +58,7 @@ class CreditAgent:
         self._requests = request_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
+        self._intent_interpreter = intent_interpreter or DeterministicIntentInterpreter()
 
     def respond(
         self,
@@ -98,6 +101,11 @@ class CreditAgent:
         state["interpreted_intent"] = None
         state["interpreted_currency"] = None
         if action is None:
+            interpretation = self._intent_interpreter.interpret(user_message)
+            state["last_intent_source"] = interpretation.source
+            state["interpreted_requested_limit"] = interpretation.requested_limit
+            action = _action_from_interpretation(interpretation.intent)
+        if action is None:
             action = _identify_action(user_message)
         if action is None:
             state["assistant_message"] = (
@@ -114,6 +122,8 @@ class CreditAgent:
                     return self._decide_request(state, interpreted_limit)
             state["assistant_message"] = "Qual é o novo limite total que você deseja?"
             return state
+
+        state["interpreted_requested_limit"] = None
 
         customer = self._load_customer(state)
         if customer is None:

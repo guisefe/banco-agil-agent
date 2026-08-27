@@ -49,13 +49,39 @@ repositório; por isso, regra de negócio e acesso a arquivo ficam separados.
 
 O fluxo não é apenas pergunta e resposta. Há autenticação obrigatória, desvios, encerramento
 global e um ciclo Entrevista → Crédito → reanálise. LangGraph deixa essas transições explícitas
-e evita um bloco único de condicionais controlando toda a conversa.
+e evita um bloco único de condicionais controlando toda a conversa. Além disso, permite manter
+as regras nos agentes e usar o framework apenas para estado e roteamento.
 
 ### Por que Groq?
 
 A Groq oferece um endpoint compatível com a API da OpenAI e baixa latência para a tarefa usada
 aqui: classificação e extração estruturada. O código não depende do provedor; `LLM_BASE_URL`,
-`LLM_API_KEY` e `LLM_MODEL` permitem trocar por outro endpoint compatível.
+`LLM_API_KEY` e `LLM_MODEL` permitem trocar por outro endpoint compatível. A escolha foi feita
+para a demonstração e não representa dependência permanente de fornecedor.
+
+### Alternativas consideradas
+
+O PDF permite escolher a stack e sugere diferentes frameworks e provedores. A comparação
+abaixo registra a decisão tomada para este projeto, considerando um prazo de sete dias e um
+fluxo bancário pequeno, mas com estados e regras obrigatórias.
+
+| Alternativa | Por que não foi escolhida neste projeto |
+| --- | --- |
+| Google ADK | É uma opção válida para agentes integrados ao ecossistema Google, mas adicionaria uma abstração e um modelo operacional novos sem vantagem concreta para os quatro fluxos exigidos. |
+| CrewAI | É voltado à colaboração mais autônoma entre agentes. Aqui os handoffs precisam seguir uma ordem previsível e auditável, não uma delegação aberta de tarefas. |
+| LangChain | Oferece muitas integrações, porém o projeto precisa principalmente de máquina de estados. Usar LangChain junto do LangGraph aumentaria a superfície da solução sem necessidade. |
+| LlamaIndex | É mais adequado quando recuperação e indexação de documentos são centrais. Este desafio trabalha com CSVs pequenos, regras locais e uma API de cotação, sem RAG. |
+| Código sem framework | Seria possível implementar o fluxo manualmente, mas autenticação, desvios, encerramento global e reanálise deixariam o roteamento mais espalhado e difícil de visualizar. |
+
+Para a LLM, Gemini, OpenAI e Together AI atenderiam à classificação estruturada. Groq foi
+escolhida pela baixa latência e pelo acesso simples para demonstração. Como a chamada utiliza
+um contrato HTTP compatível com OpenAI, a troca de provedor depende de configuração, não de
+reescrever os agentes.
+
+Na cotação, Tavily e SerpAPI também aparecem como exemplos no PDF, mas são ferramentas de
+busca genérica. A AwesomeAPI foi preferida por oferecer um endpoint específico para pares de
+moedas, com payload menor e validação mais simples. Streamlit não foi comparado com outras UIs
+porque é um requisito explícito da entrega.
 
 ### Onde a LLM participa
 

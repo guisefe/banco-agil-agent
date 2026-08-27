@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from app.graph.workflow import ConversationWorkflow
 from app.models.exchange import ExchangeQuote
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
 
@@ -36,19 +37,15 @@ def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:
     app = make_app_test().run()
 
     app.chat_input[0].set_value("00000000000").run()
-    assert "***.***.***-**" in app.chat_message[1].markdown[0].value
+    assert "***.***.***-00" in app.chat_message[1].markdown[0].value
 
     app.chat_input[0].set_value("20/05/1990").run()
-    assert "**/**/****" in app.chat_message[3].markdown[0].value
+    assert "**/**/1990" in app.chat_message[3].markdown[0].value
 
     app.chat_input[0].set_value("Quero consultar meu limite").run()
 
     assert not app.exception
     assert app.chat_input[0].disabled is False
-
-    app.chat_input[0].set_value("consultar limite atual").run()
-
-    assert not app.exception
     assert "R$ 2.500,00" in app.chat_message[-1].markdown[0].value
 
 
@@ -90,10 +87,38 @@ def test_streamlit_app_completes_exchange_quote(
 
     assert not app.exception
     assert app.chat_input[0].disabled is False
-
-    app.chat_input[0].set_value("USD").run()
-
-    assert not app.exception
     assert "Cotação de USD" in app.chat_message[-1].markdown[0].value
     assert app.chat_input[0].disabled is False
     assert not app.info
+
+
+def test_streamlit_app_answers_score_query_without_repetition() -> None:
+    app = make_app_test().run()
+    app.chat_input[0].set_value("00000000000").run()
+    app.chat_input[0].set_value("20/05/1990").run()
+
+    app.chat_input[0].set_value("quero saber meu score").run()
+
+    assert not app.exception
+    assert "650 de 1000" in app.chat_message[-1].markdown[0].value
+    assert app.chat_input[0].disabled is False
+
+
+def test_streamlit_app_recovers_from_unexpected_workflow_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_respond(
+        workflow: ConversationWorkflow,
+        state: object,
+        user_message: str,
+    ) -> object:
+        raise RuntimeError("simulated unexpected failure")
+
+    monkeypatch.setattr(ConversationWorkflow, "respond", fail_respond)
+    app = make_app_test().run()
+
+    app.chat_input[0].set_value("00000000000").run()
+
+    assert not app.exception
+    assert "sessão continua ativa" in app.chat_message[-1].markdown[0].value
+    assert app.chat_input[0].disabled is False

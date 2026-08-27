@@ -1,16 +1,17 @@
-# Banco Ágil - Agente Bancário Inteligente
+# Banco Ágil — Crédito conversacional auditável
 
 [![CI](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![Status](https://img.shields.io/badge/status-MVP%20completo-brightgreen)
 
-MVP de atendimento bancário conversacional com quatro agentes especializados, interface
-Streamlit e orquestração por LangGraph. A solução cobre o fluxo completo do desafio técnico
-da Tech For Humans: autenticação, crédito, entrevista financeira, reanálise e câmbio.
+Implementação do desafio técnico da Tech For Humans para atendimento bancário com quatro
+agentes, Streamlit e LangGraph. O foco não é produzir respostas bancárias com uma LLM, mas
+orquestrar um fluxo verificável: autenticação, crédito, entrevista financeira, reanálise e
+câmbio, com regras críticas determinísticas.
 
-> **Entrega completa:** 309 testes, 100% de linhas e branches cobertos, interpretação por
-> LLM com fallback determinístico, MyPy strict, Ruff, CI, auditoria pseudonimizada e
-> container não-root com health check.
+> **Ideia central:** a LLM compreende linguagem; o domínio decide. Se o provedor falhar, o
+> atendimento continua por fallback determinístico. Score, aprovação e persistência nunca
+> são delegados ao modelo.
 
 ## Visão Geral do Projeto
 
@@ -38,6 +39,17 @@ são implícitas, preservando a experiência de uma conversa única.
 | Câmbio | Consulta a AwesomeAPI e retorna a cotação atual pela mesma interface. |
 | Consulta de score | Informa o score interno de 0–1000 ou explica que ele ainda não foi calculado. |
 | Encerramento | Finaliza qualquer etapa e remove dados pessoais e financeiros do estado. |
+
+### O que torna esta implementação específica
+
+| Situação de domínio | Tratamento adotado |
+| --- | --- |
+| Cliente sem score | O pedido permanece pendente; ausência de avaliação não é convertida em score zero. |
+| Pedido rejeitado | A entrevista recalcula o score e reanalisa exatamente o limite original. |
+| Falha entre arquivos CSV | Escritas usam substituição atômica e compensação quando a operação seguinte falha. |
+| Linguagem ambígua | A LLM produz somente uma intenção validada; saída inválida aciona fallback. |
+| Auditoria indisponível | Decisões críticas são bloqueadas ou compensadas; telemetria não crítica não derruba o fluxo. |
+| Câmbio indisponível | O erro externo é traduzido para uma resposta controlada sem expor payload ou exceção. |
 
 ## Arquitetura do Sistema
 
@@ -243,11 +255,21 @@ observabilidade, retenção formal e procedimentos operacionais.
 | GitHub Actions | Executa os mesmos controles em toda PR e na branch principal. |
 | Docker não-root | Empacota a demonstração sem executar a aplicação como administrador. |
 
-O provedor padrão é a API compatível com OpenAI da Groq, usando
-[`openai/gpt-oss-20b`](https://console.groq.com/docs/models). URL e modelo são configuráveis,
-portanto o serviço pode ser trocado sem
-alterar os agentes. Sem chave, o modo local continua funcional para desenvolvimento e CI,
-mas a demonstração da capacidade de IA deve ser feita com `GROQ_API_KEY` configurada.
+### Por que LangGraph?
+
+O fluxo possui autenticação obrigatória, desvios, encerramento global e um ciclo real:
+Entrevista → Crédito → reanálise. LangGraph deixa essas transições e o estado compartilhado
+explícitos e testáveis. Um roteador Python simples atenderia um fluxo linear, mas exigiria
+reimplementar manualmente o controle dos ciclos e handoffs deste desafio.
+
+### Por que Groq?
+
+A Groq foi escolhida para manter baixa latência na classificação de intenção e por oferecer
+uma [API compatível com OpenAI](https://console.groq.com/docs/openai). O provedor padrão usa
+[`openai/gpt-oss-20b`](https://console.groq.com/docs/models), mas URL e modelo permanecem
+configuráveis atrás do contrato `IntentInterpreter`. Assim, trocar de provedor não altera os
+agentes nem as regras bancárias. Sem chave, o modo local continua funcional; a demonstração
+da capacidade de IA deve usar `GROQ_API_KEY` fora do repositório.
 
 ## Tutorial de Execução e Testes
 

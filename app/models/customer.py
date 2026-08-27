@@ -9,7 +9,7 @@ class Customer:
     name: str
     birth_date: date
     credit_limit: Decimal
-    credit_score: int
+    credit_score: int | None
 
     def __post_init__(self) -> None:
         if not self.cpf.strip():
@@ -18,5 +18,5 @@ class Customer:
             raise ValueError("name must not be blank")
         if not self.credit_limit.is_finite() or self.credit_limit < 0:
             raise ValueError("credit_limit must be non-negative")
-        if not 0 <= self.credit_score <= 1000:
+        if self.credit_score is not None and not 0 <= self.credit_score <= 1000:
             raise ValueError("credit_score must be between 0 and 1000")

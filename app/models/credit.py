@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
-CreditRequestStatus = Literal["aprovado", "rejeitado"]
+CreditRequestStatus = Literal["aprovado", "rejeitado", "pendente"]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

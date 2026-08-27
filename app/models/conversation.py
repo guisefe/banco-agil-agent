@@ -58,6 +58,8 @@ class ConversationState(TypedDict):
     triage_stage: TriageStage
     credit_stage: CreditStage
     requested_credit_limit: Decimal | None
+    pending_credit_requested_at: str | None
+    handoff_pending: bool
     interview_stage: InterviewStage
     monthly_income: Decimal | None
     employment_type: EmploymentType | None
@@ -84,6 +86,8 @@ def initial_state() -> ConversationState:
         "triage_stage": "greeting",
         "credit_stage": "awaiting_action",
         "requested_credit_limit": None,
+        "pending_credit_requested_at": None,
+        "handoff_pending": False,
         "interview_stage": "awaiting_income",
         "monthly_income": None,
         "employment_type": None,

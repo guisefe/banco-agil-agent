@@ -116,3 +116,124 @@ def test_credit_request_repository_wraps_write_failure(tmp_path: Path) -> None:
 
     with pytest.raises(CreditRepositoryError, match="could not be recorded"):
         repository.append(make_credit_request())
+
+
+def test_credit_request_repository_finalizes_exact_pending_row(tmp_path: Path) -> None:
+    path = tmp_path / "solicitacoes_aumento_limite.csv"
+    repository = CsvCreditRequestRepository(path)
+    pending = CreditRequest(
+        customer_cpf="00000000000",
+        requested_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+        current_limit=Decimal("2500.00"),
+        requested_limit=Decimal("6000.00"),
+        status="pendente",
+    )
+    repository.append(pending)
+
+    repository.finalize_pending(
+        customer_cpf=pending.customer_cpf,
+        requested_at=pending.requested_at,
+        status="aprovado",
+    )
+
+    with path.open(newline="", encoding="utf-8") as request_file:
+        row = next(csv.DictReader(request_file))
+    assert row["status_pedido"] == "aprovado"
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_credit_request_repository_rejects_missing_pending_row(tmp_path: Path) -> None:
+    path = tmp_path / "solicitacoes_aumento_limite.csv"
+    path.write_text(
+        ",".join(
+            (
+                "cpf_cliente",
+                "data_hora_solicitacao",
+                "limite_atual",
+                "novo_limite_solicitado",
+                "status_pedido",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    repository = CsvCreditRequestRepository(path)
+
+    with pytest.raises(CreditRepositoryError, match="not found exactly once"):
+        repository.finalize_pending(
+            customer_cpf="00000000000",
+            requested_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+            status="rejeitado",
+        )
+
+
+def test_credit_request_repository_rejects_invalid_header_when_finalizing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "solicitacoes_aumento_limite.csv"
+    path.write_text("wrong,header\n", encoding="utf-8")
+    repository = CsvCreditRequestRepository(path)
+
+    with pytest.raises(CreditRepositoryError, match="invalid schema"):
+        repository.finalize_pending(
+            customer_cpf="00000000000",
+            requested_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+            status="rejeitado",
+        )
+
+
+def test_credit_request_repository_cleans_temp_file_when_finalize_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "solicitacoes_aumento_limite.csv"
+    repository = CsvCreditRequestRepository(path)
+    pending = CreditRequest(
+        customer_cpf="00000000000",
+        requested_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+        current_limit=Decimal("2500.00"),
+        requested_limit=Decimal("6000.00"),
+        status="pendente",
+    )
+    repository.append(pending)
+
+    def fail_replace(source: Path, target: Path) -> Path:
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(CreditRepositoryError, match="could not be finalized"):
+        repository.finalize_pending(
+            customer_cpf=pending.customer_cpf,
+            requested_at=pending.requested_at,
+            status="aprovado",
+        )
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_credit_request_repository_wraps_failure_before_finalize_temp_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "solicitacoes_aumento_limite.csv"
+    repository = CsvCreditRequestRepository(path)
+    pending = CreditRequest(
+        customer_cpf="00000000000",
+        requested_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
+        current_limit=Decimal("2500.00"),
+        requested_limit=Decimal("6000.00"),
+        status="pendente",
+    )
+    repository.append(pending)
+
+    def fail_mkdir(path: Path, *args: object, **kwargs: object) -> None:
+        raise OSError("simulated mkdir failure")
+
+    monkeypatch.setattr(Path, "mkdir", fail_mkdir)
+
+    with pytest.raises(CreditRepositoryError, match="could not be finalized"):
+        repository.finalize_pending(
+            customer_cpf=pending.customer_cpf,
+            requested_at=pending.requested_at,
+            status="rejeitado",
+        )

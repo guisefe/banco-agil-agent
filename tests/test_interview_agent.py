@@ -19,7 +19,7 @@ PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 class CustomerRepositoryStub:
     error: bool = False
     fail_on_update: int | None = None
-    updates: list[int] = field(default_factory=list)
+    updates: list[int | None] = field(default_factory=list)
     update_count: int = 0
     customer: Customer | None = field(
         default_factory=lambda: Customer(
@@ -38,7 +38,7 @@ class CustomerRepositoryStub:
             return None
         return self.customer
 
-    def update_credit_score(self, *, cpf: str, credit_score: int) -> None:
+    def update_credit_score(self, *, cpf: str, credit_score: int | None) -> None:
         self.update_count += 1
         if (
             self.error

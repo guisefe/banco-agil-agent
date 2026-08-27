@@ -129,6 +129,27 @@ def test_csv_repository_updates_credit_score_atomically(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_csv_repository_supports_missing_score_and_restores_blank_value(tmp_path: Path) -> None:
+    customer_file = tmp_path / "clientes.csv"
+    customer_file.write_text(
+        "cpf,nome,data_nascimento,limite_credito,score\n"
+        "22222222222,Mariana Souza,1995-02-14,1200.00,\n",
+        encoding="utf-8",
+    )
+    repository = CsvCustomerRepository(customer_file)
+
+    customer = repository.get_by_cpf(cpf="22222222222")
+    assert customer is not None
+    assert customer.credit_score is None
+
+    repository.update_credit_score(cpf="22222222222", credit_score=500)
+    repository.update_credit_score(cpf="22222222222", credit_score=None)
+
+    restored = repository.get_by_cpf(cpf="22222222222")
+    assert restored is not None
+    assert restored.credit_score is None
+
+
 def test_csv_repository_preserves_extra_columns_when_updating_limit(tmp_path: Path) -> None:
     customer_file = tmp_path / "clientes.csv"
     customer_file.write_text(

@@ -43,7 +43,6 @@ def authenticate_and_route_to_credit(application: Application) -> ConversationSt
 def test_approved_credit_flow_updates_customer_request_and_safe_audit(tmp_path: Path) -> None:
     application, settings = build_test_application(tmp_path)
     state = authenticate_and_route_to_credit(application)
-    state = application.workflow.respond(state, "solicitar aumento")
 
     state = application.workflow.respond(state, "R$ 5.000,00")
 
@@ -67,7 +66,6 @@ def test_approved_credit_flow_updates_customer_request_and_safe_audit(tmp_path: 
 def test_rejected_credit_flow_offers_interview_handoff(tmp_path: Path) -> None:
     application, settings = build_test_application(tmp_path)
     state = authenticate_and_route_to_credit(application)
-    state = application.workflow.respond(state, "aumentar limite")
     state = application.workflow.respond(state, "6000")
 
     assert state["credit_stage"] == "offering_interview"

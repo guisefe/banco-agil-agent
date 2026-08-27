@@ -15,6 +15,7 @@ from app.tools.conversation import end_conversation, is_end_request
 
 GraphRoute = Literal["triage", "credit", "interview", "exchange"]
 InterviewRoute = Literal["credit_reanalysis", "end"]
+TriageRoute = Literal["credit", "interview", "exchange", "end"]
 
 
 class ConversationWorkflow:
@@ -59,7 +60,16 @@ class ConversationWorkflow:
                 "exchange": "exchange",
             },
         )
-        builder.add_edge("triage", END)
+        builder.add_conditional_edges(
+            "triage",
+            self._route_after_triage,
+            {
+                "credit": "credit",
+                "interview": "interview",
+                "exchange": "exchange",
+                "end": END,
+            },
+        )
         builder.add_edge("credit", END)
         builder.add_edge("exchange", END)
         builder.add_conditional_edges(
@@ -97,13 +107,23 @@ class ConversationWorkflow:
         return self._triage_agent.respond(state, state["user_message"])
 
     def _run_credit(self, state: ConversationState) -> ConversationState:
-        return self._credit_agent.respond(state, state["user_message"])
+        return self._credit_agent.respond(
+            state,
+            state["user_message"],
+            advance_turn=not state["handoff_pending"],
+        )
 
     def _run_interview(self, state: ConversationState) -> ConversationState:
+        if state["handoff_pending"]:
+            return self._interview_agent.begin(state)
         return self._interview_agent.respond(state, state["user_message"])
 
     def _run_exchange(self, state: ConversationState) -> ConversationState:
-        return self._exchange_agent.respond(state, state["user_message"])
+        return self._exchange_agent.respond(
+            state,
+            state["user_message"],
+            advance_turn=not state["handoff_pending"],
+        )
 
     def _run_credit_reanalysis(self, state: ConversationState) -> ConversationState:
         return self._credit_agent.reanalyze_pending_request(state)
@@ -122,6 +142,18 @@ class ConversationWorkflow:
     def _route_after_interview(state: ConversationState) -> InterviewRoute:
         if state["active_agent"] == "credit" and state["requested_credit_limit"] is not None:
             return "credit_reanalysis"
+        return "end"
+
+    @staticmethod
+    def _route_after_triage(state: ConversationState) -> TriageRoute:
+        if not state["handoff_pending"]:
+            return "end"
+        if state["active_agent"] == "credit":
+            return "credit"
+        if state["active_agent"] == "interview":
+            return "interview"
+        if state["active_agent"] == "exchange":
+            return "exchange"
         return "end"
 
     def _end_by_user_request(

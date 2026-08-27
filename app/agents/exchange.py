@@ -37,10 +37,18 @@ class ExchangeAgent:
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
 
-    def respond(self, state: ConversationState, user_message: str) -> ConversationState:
+    def respond(
+        self,
+        state: ConversationState,
+        user_message: str,
+        *,
+        advance_turn: bool = True,
+    ) -> ConversationState:
         self._ensure_exchange_can_respond(state)
         next_state = state.copy()
-        next_state["turn_number"] += 1
+        if advance_turn:
+            next_state["turn_number"] += 1
+        next_state["handoff_pending"] = False
         next_state["user_message"] = user_message
 
         currency = _identify_currency(user_message)

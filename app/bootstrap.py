@@ -10,22 +10,43 @@ from app.graph.workflow import ConversationWorkflow
 from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRepository
 from app.repositories.customers import CsvCustomerRepository
 from app.repositories.exchange import AwesomeApiExchangeRateRepository
+from app.services.intent import (
+    DeterministicIntentInterpreter,
+    IntentInterpreter,
+    OpenAICompatibleIntentInterpreter,
+    ResilientIntentInterpreter,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Application:
     workflow: ConversationWorkflow
     uses_ephemeral_audit_key: bool
+    uses_llm: bool
 
 
 def build_application(*, settings: Settings | None = None) -> Application:
     resolved_settings = settings or load_settings()
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
+    deterministic_interpreter = DeterministicIntentInterpreter()
+    intent_interpreter: IntentInterpreter
+    if resolved_settings.llm_api_key is None:
+        intent_interpreter = deterministic_interpreter
+    else:
+        intent_interpreter = ResilientIntentInterpreter(
+            primary=OpenAICompatibleIntentInterpreter(
+                api_key=resolved_settings.llm_api_key,
+                base_url=resolved_settings.llm_base_url,
+                model=resolved_settings.llm_model,
+            ),
+            fallback=deterministic_interpreter,
+        )
     triage_agent = TriageAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
+        intent_interpreter=intent_interpreter,
     )
     credit_agent = CreditAgent(
         customer_repository=customer_repository,
@@ -56,4 +77,5 @@ def build_application(*, settings: Settings | None = None) -> Application:
             pseudonymization_key=resolved_settings.pseudonymization_key,
         ),
         uses_ephemeral_audit_key=resolved_settings.uses_ephemeral_audit_key,
+        uses_llm=resolved_settings.llm_api_key is not None,
     )

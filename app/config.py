@@ -8,6 +8,12 @@ from app.audit.privacy import MIN_PSEUDONYMIZATION_KEY_BYTES
 
 AUDIT_KEY_ENVIRONMENT_VARIABLE = "AUDIT_PSEUDONYMIZATION_KEY"
 EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE = "EXCHANGE_API_KEY"
+LLM_API_KEY_ENVIRONMENT_VARIABLE = "LLM_API_KEY"
+GROQ_API_KEY_ENVIRONMENT_VARIABLE = "GROQ_API_KEY"
+LLM_BASE_URL_ENVIRONMENT_VARIABLE = "LLM_BASE_URL"
+LLM_MODEL_ENVIRONMENT_VARIABLE = "LLM_MODEL"
+DEFAULT_LLM_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_LLM_MODEL = "openai/gpt-oss-20b"
 
 
 class ConfigurationError(RuntimeError):
@@ -24,6 +30,9 @@ class Settings:
     exchange_api_key: str | None
     pseudonymization_key: bytes
     uses_ephemeral_audit_key: bool
+    llm_api_key: str | None = None
+    llm_base_url: str = DEFAULT_LLM_BASE_URL
+    llm_model: str = DEFAULT_LLM_MODEL
 
 
 def load_settings(
@@ -47,6 +56,24 @@ def load_settings(
                 f"{MIN_PSEUDONYMIZATION_KEY_BYTES} bytes"
             )
 
+    raw_llm_api_key = (
+        source_environment.get(LLM_API_KEY_ENVIRONMENT_VARIABLE)
+        or source_environment.get(GROQ_API_KEY_ENVIRONMENT_VARIABLE)
+        or None
+    )
+    llm_api_key = raw_llm_api_key.strip() if raw_llm_api_key else None
+    llm_api_key = llm_api_key or None
+    llm_base_url = source_environment.get(
+        LLM_BASE_URL_ENVIRONMENT_VARIABLE,
+        DEFAULT_LLM_BASE_URL,
+    ).strip()
+    llm_model = source_environment.get(
+        LLM_MODEL_ENVIRONMENT_VARIABLE,
+        DEFAULT_LLM_MODEL,
+    ).strip()
+    if llm_api_key is not None and (not llm_base_url or not llm_model):
+        raise ConfigurationError("LLM base URL and model must not be blank when LLM is enabled")
+
     return Settings(
         project_root=resolved_root,
         customer_file=resolved_root / "data" / "clientes.csv",
@@ -56,4 +83,7 @@ def load_settings(
         exchange_api_key=source_environment.get(EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE),
         pseudonymization_key=pseudonymization_key,
         uses_ephemeral_audit_key=uses_ephemeral_key,
+        llm_api_key=llm_api_key,
+        llm_base_url=llm_base_url,
+        llm_model=llm_model,
     )

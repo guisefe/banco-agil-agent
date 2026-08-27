@@ -17,7 +17,7 @@ from app.models.intent import (
 from app.tools.conversation import normalize_text
 
 INTENT_POLICY_VERSION = "hybrid-intent-v1"
-DEFAULT_LLM_TIMEOUT_SECONDS = 3.0
+DEFAULT_LLM_TIMEOUT_SECONDS = 8.0
 MAX_LLM_MESSAGE_CHARACTERS = 1000
 
 _SYSTEM_PROMPT = """Você classifica a intenção de mensagens de um banco digital fictício.
@@ -135,6 +135,7 @@ class OpenAICompatibleIntentInterpreter:
             raise ValueError("timeout_seconds must be positive")
         self._api_key = api_key
         self._endpoint = f"{base_url.rstrip('/')}/chat/completions"
+        self._uses_groq = "api.groq.com" in base_url.casefold()
         self._model = model
         self._timeout_seconds = timeout_seconds
         self._transport = transport
@@ -146,22 +147,28 @@ class OpenAICompatibleIntentInterpreter:
                 timeout=self._timeout_seconds,
                 transport=self._transport,
             ) as client:
+                request_payload: dict[str, object] = {
+                    "model": self._model,
+                    "temperature": 0,
+                    "max_completion_tokens": 256,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": safe_message},
+                    ],
+                }
+                if self._uses_groq:
+                    request_payload.update(
+                        reasoning_effort="low",
+                        include_reasoning=False,
+                    )
                 response = client.post(
                     self._endpoint,
                     headers={
                         "Authorization": f"Bearer {self._api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "model": self._model,
-                        "temperature": 0,
-                        "max_completion_tokens": 80,
-                        "response_format": {"type": "json_object"},
-                        "messages": [
-                            {"role": "system", "content": _SYSTEM_PROMPT},
-                            {"role": "user", "content": safe_message},
-                        ],
-                    },
+                    json=request_payload,
                 )
                 response.raise_for_status()
                 return _parse_chat_completion(response.json())

@@ -191,7 +191,17 @@ uv run streamlit run streamlit_app.py
 ```
 
 As variáveis equivalentes `LLM_API_KEY` e `LLM_BASE_URL` permitem outro provedor compatível.
-Copie `.env.example` se preferir manter a configuração em arquivo local; não versione chaves.
+As variáveis precisam ser exportadas **antes** de iniciar o Streamlit. Depois de alterar a
+chave, interrompa o servidor com `Ctrl+C` e execute-o novamente; o botão “Nova conversa” não
+recarrega variáveis do processo. O arquivo `.env.example` é apenas uma referência e não é
+carregado automaticamente.
+
+A barra lateral mostra o estado da integração:
+
+- `LLM configurada — aguardando mensagem`: a chave foi encontrada, mas ainda não houve chamada;
+- `LLM ativa`: a última intenção foi interpretada pelo modelo;
+- `LLM falhou — fallback ativo`: a chamada falhou e o classificador local assumiu o turno;
+- `fallback local`: nenhuma chave foi encontrada ao iniciar a aplicação.
 
 ## Testes
 

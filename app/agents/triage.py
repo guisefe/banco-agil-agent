@@ -219,6 +219,7 @@ class TriageAgent:
         user_message: str,
     ) -> ConversationState:
         interpretation = self._intent_interpreter.interpret(user_message)
+        state["last_intent_source"] = interpretation.source
         self._record_intent_interpretation(state, interpretation)
         destination = _destination_for(interpretation.intent)
         if destination is None:

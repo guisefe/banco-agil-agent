@@ -31,7 +31,7 @@ def render_app() -> None:
     with st.sidebar:
         st.subheader("Sessão")
         st.write("Canal: **Atendimento**")
-        interpretation_mode = "LLM + fallback seguro" if application.uses_llm else "fallback local"
+        interpretation_mode = _interpretation_mode(application, state)
         st.write(f"Interpretação: **{interpretation_mode}**")
         st.write(f"Tentativas de autenticação: **{state['authentication_attempts']}/3**")
         if application.uses_ephemeral_audit_key:
@@ -99,3 +99,13 @@ def _reset_conversation(application: Application) -> None:
     state = application.workflow.start()
     st.session_state[_STATE_KEY] = state
     st.session_state[_MESSAGES_KEY] = [{"role": "assistant", "content": state["assistant_message"]}]
+
+
+def _interpretation_mode(application: Application, state: ConversationState) -> str:
+    if not application.uses_llm:
+        return "fallback local"
+    if state["last_intent_source"] == "llm":
+        return "LLM ativa"
+    if state["last_intent_source"] == "deterministic_fallback":
+        return "LLM falhou — fallback ativo"
+    return "LLM configurada — aguardando mensagem"

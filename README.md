@@ -8,7 +8,7 @@ MVP de atendimento bancário conversacional com quatro agentes especializados, i
 Streamlit e orquestração por LangGraph. A solução cobre o fluxo completo do desafio técnico
 da Tech For Humans: autenticação, crédito, entrevista financeira, reanálise e câmbio.
 
-> **Entrega completa:** 242 testes, 100% de linhas e branches cobertos, MyPy strict, Ruff,
+> **Entrega completa:** 268 testes, 100% de linhas e branches cobertos, MyPy strict, Ruff,
 > CI, auditoria pseudonimizada e container não-root com health check.
 
 ## Visão Geral do Projeto
@@ -32,9 +32,10 @@ são implícitas, preservando a experiência de uma conversa única.
 | --- | --- |
 | Autenticação | Valida CPF e nascimento no `clientes.csv`, com até três tentativas. |
 | Consulta de crédito | Exibe o limite atual somente após autenticação. |
-| Aumento de limite | Registra o pedido e aplica a política do `score_limite.csv`. |
+| Aumento de limite | Registra o pedido e aplica a política do `score_limite.csv`. Sem score, mantém o pedido pendente e oferece entrevista. |
 | Entrevista financeira | Recalcula o score, atualiza o cliente e reanalisa o pedido original. |
 | Câmbio | Consulta a AwesomeAPI e retorna a cotação atual pela mesma interface. |
+| Consulta de score | Informa o score interno de 0–1000 ou explica que ele ainda não foi calculado. |
 | Encerramento | Finaliza qualquer etapa e remove dados pessoais e financeiros do estado. |
 
 ## Arquitetura do Sistema
@@ -72,7 +73,8 @@ flowchart TD
 
 1. A Triagem solicita CPF e data de nascimento separadamente.
 2. Os dados são comparados com `clientes.csv`.
-3. Após uma autenticação válida, a intenção do cliente é identificada.
+3. Após uma autenticação válida, a intenção do cliente é identificada e encaminhada no
+   mesmo turno, sem obrigá-lo a repetir o pedido.
 4. Em caso de falha, são permitidas mais duas tentativas.
 5. A terceira falha consecutiva encerra o atendimento de maneira amigável.
 
@@ -88,6 +90,29 @@ Nenhum agente de Crédito, Entrevista ou Câmbio será acessado antes da autenti
 | API de câmbio | Consulta | Obter cotação atual da moeda solicitada. |
 | Auditoria JSONL | Append-only no MVP | Registrar eventos técnicos e de negócio sem dados brutos. |
 
+Os três nomes de arquivo CSV foram mantidos literalmente porque são obrigatórios no PDF do
+desafio. Renomeá-los deixaria a entrega mais elegante, mas quebraria a aderência à
+especificação. Em uma aplicação real, eles seriam tabelas ou recursos com nomes de domínio,
+por exemplo `customers`, `credit_limit_policy` e `credit_limit_requests`.
+
+### Dicionário dos CSVs
+
+| Arquivo | Campo | Significado |
+| --- | --- | --- |
+| `clientes.csv` | `cpf` | Identificador fictício usado na autenticação da demonstração. |
+| `clientes.csv` | `nome` | Nome fictício exibido após autenticação. |
+| `clientes.csv` | `data_nascimento` | Data ISO usada com o CPF para confirmar identidade. |
+| `clientes.csv` | `limite_credito` | Limite total atual, armazenado com duas casas decimais. |
+| `clientes.csv` | `score` | Score interno de 0–1000; vazio significa “ainda não calculado”, nunca score negativo. |
+| `score_limite.csv` | `score_minimo` / `score_maximo` | Faixa inclusiva da política determinística. |
+| `score_limite.csv` | `limite_maximo` | Maior limite total permitido para a faixa. |
+| `solicitacoes_aumento_limite.csv` | `data_hora_solicitacao` | Instante UTC em ISO 8601. |
+| `solicitacoes_aumento_limite.csv` | `limite_atual` / `novo_limite_solicitado` | Valores considerados no pedido. |
+| `solicitacoes_aumento_limite.csv` | `status_pedido` | `pendente`, `aprovado` ou `rejeitado`. |
+
+O conjunto de demonstração contém cinco perfis fictícios distribuídos por faixas diferentes,
+incluindo um cliente sem score para validar o caminho pendente → entrevista → reanálise.
+
 CPF e data de nascimento são utilizados no fluxo funcional exigido pelo desafio, mas não
 são gravados na auditoria. Quando for necessário correlacionar eventos, o titular será
 representado por uma referência pseudonimizada com HMAC-SHA-256. Veja as decisões e
@@ -102,7 +127,7 @@ limitações em [Privacidade e Auditoria](docs/PRIVACY_AND_AUDIT.md).
 | Entrevista | Cinco perguntas, score versionado entre 0–1000 e compensação em falha. |
 | Câmbio | USD, EUR, ARS, GBP e JPY; timeout, retry de transporte e payload validado. |
 | Orquestração | LangGraph, estado tipado, escopos isolados e handoffs invisíveis. |
-| Interface | Streamlit cobrindo os quatro agentes e mascarando entradas sensíveis. |
+| Interface | Streamlit cobrindo os quatro agentes, com feedback de processamento, recuperação de falhas e mascaramento parcial. |
 | Auditoria | JSONL mínimo, motivos controlados e referência HMAC-SHA-256. |
 | Qualidade | Pytest, cobertura integral, Ruff, MyPy strict, CI e Dependabot. |
 | Entrega | Execução local ou Docker não-root com health check verificado na CI. |
@@ -157,6 +182,17 @@ A fórmula sugerida pelo desafio foi implementada com `Decimal`, pesos explícit
 arredondamento `ROUND_HALF_UP`. O resultado é limitado entre 0 e 1000 antes de ser salvo.
 Se a auditoria crítica do novo score falhar, o repositório restaura o score anterior; uma
 falha posterior apenas no evento de handoff não desfaz uma atualização já confirmada.
+
+O peso de dívida ativa é negativo dentro da fórmula, mas o score final nunca é negativo:
+antes da gravação, o resultado é limitado ao intervalo inclusivo de **0 a 1000**. Um campo
+vazio representa ausência de avaliação; `0` representa um score calculado válido.
+
+### Linguagem natural sem abrir mão do determinismo
+
+A compreensão de intenções usa um vocabulário explícito e testável. Frases como “quero saber
+meu score”, “qual meu limite”, “quero mais limite” e “cotação do dólar” são processadas no
+mesmo turno do handoff. Uma LLM continua fora de autenticação, score e aprovação. Em uma
+evolução, ela poderia classificar apenas mensagens ambíguas, com fallback determinístico.
 
 ### Integração externa resiliente
 
@@ -255,15 +291,18 @@ saudável antes de permitir a integração.
 ### Executar a aplicação
 
 ```bash
-uv run streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
 ```
 
 Use um dos clientes fictícios para testar a Triagem:
 
-| CPF | Nascimento |
-| --- | --- |
-| `000.000.000-00` | `20/05/1990` |
-| `111.111.111-11` | `03/11/1985` |
+| Perfil | CPF | Nascimento | Score inicial | Uso recomendado |
+| --- | --- | --- | ---: | --- |
+| Ana Martins | `000.000.000-00` | `20/05/1990` | 650 | Consulta e aprovação até R$ 5.000. |
+| Carlos Oliveira | `111.111.111-11` | `03/11/1985` | 780 | Faixa de limite superior. |
+| Mariana Souza | `222.222.222-22` | `14/02/1995` | ausente | Pedido pendente e entrevista obrigatória. |
+| João Pereira | `333.333.333-33` | `08/09/1978` | 280 | Rejeição por faixa baixa. |
+| Beatriz Santos | `444.444.444-44` | `01/12/2000` | 910 | Maior faixa da política. |
 
 Depois da autenticação, escolha crédito e consulte o limite ou solicite um aumento. Para o
 cliente com score 650, `R$ 5.000,00` é aprovado e um valor superior oferece a entrevista.
@@ -271,6 +310,51 @@ Responda às cinco perguntas; ao final, o score é atualizado e o mesmo limite �
 automaticamente. Para câmbio, peça a cotação de dólar, euro, peso argentino, libra ou iene;
 após a resposta, o atendimento retorna naturalmente ao menu. Nenhuma chave real deve ser
 adicionada ao repositório.
+
+### Roteiro manual de aceite
+
+1. Abra `http://localhost:8501` e confirme que o campo de mensagem está habilitado.
+2. Informe `000.000.000-00`; o chat deve mostrar apenas `***.***.***-00`.
+3. Informe `20/05/1990`; o chat deve mostrar apenas `**/**/1990`.
+4. Escreva `quero saber meu score`; a resposta deve informar `650 de 1000` sem pedir que
+   você repita a intenção.
+5. Escreva `quero aumentar meu limite`; informe `R$ 5.000,00`; o pedido deve ser aprovado,
+   o limite atualizado e uma linha adicionada ao CSV de solicitações.
+6. Inicie uma nova conversa com Mariana Souza e peça `quero limite de 6000`; como o score
+   está vazio, o pedido deve ficar `pendente` e a entrevista deve ser oferecida.
+7. Aceite e responda, por exemplo: renda `10000`, emprego `formal`, despesas `1000`,
+   dependentes `0`, dívidas `não`. O score deve permanecer entre 0 e 1000 e o mesmo pedido
+   deve ser reanalisado, sem criar duas solicitações.
+8. Peça `cotação do dólar`; uma resposta válida deve chegar no mesmo turno ou uma mensagem
+   controlada deve informar a indisponibilidade do provedor.
+9. Em qualquer etapa, escreva `encerrar`; o campo de entrada deve ser desabilitado e o botão
+   **Nova conversa** deve iniciar uma sessão limpa.
+
+> Os testes manuais alteram os CSVs. Para repetir a demonstração, restaure os três arquivos
+> em `data/` a partir do Git ou execute sobre cópias descartáveis.
+
+### Se a interface parecer travada ou desconectar
+
+- aguarde a mensagem “Processando sua solicitação...” durante a consulta externa;
+- confirme que o terminal continua executando o Streamlit na porta 8501;
+- em Codespaces, abra a porta encaminhada 8501 e verifique se a visibilidade está adequada;
+- execute `curl --fail http://localhost:8501/_stcore/health` para testar a saúde do servidor;
+- se uma operação falhar, a UI preserva a sessão e permite tentar novamente;
+- use **Nova conversa** apenas quando desejar descartar o estado atual.
+
+## Aderência bancária brasileira: escopo e limites
+
+O MVP segue a lógica prudente de não aprovar crédito sem dados suficientes para avaliar o
+risco. Isso não significa que todo banco exija um score externo específico: instituições
+reais combinam histórico interno, renda e capacidade de pagamento, endividamento, dados de
+mercado, SCR, Open Finance e, em alguns produtos, garantias. Neste projeto, score ausente
+bloqueia apenas a **aprovação automática sem garantia** e conduz à entrevista.
+
+O sistema é adequado ao desafio técnico, mas não deve ser apresentado como motor bancário
+de produção. Ficam fora do escopo KYC e antifraude completos, prevenção à lavagem de dinheiro,
+consulta autorizada a SCR/Open Finance, verificação documental de renda, política de
+superendividamento, canal operacional de revisão humana, governança de modelo e banco de
+dados transacional.
 
 ## Segurança e Privacidade
 

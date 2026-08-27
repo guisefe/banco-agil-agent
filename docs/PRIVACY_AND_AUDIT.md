@@ -33,6 +33,11 @@ Financial interview answers exist only in the in-memory conversation state while
 questions are being completed. The UI replaces them with neutral labels, and the fields are
 cleared after score recalculation or global conversation termination.
 
+The customer's own chat uses proportional, partial masking instead of hiding all context:
+the CPF keeps only its last two digits and the birth date keeps only the year. Raw values
+remain available to the authentication operation but are not copied into chat history,
+technical logs, or audit events.
+
 `subject_ref` is produced with HMAC-SHA-256 and a secret key of at least 32 bytes. The key
 must come from a secret manager or protected environment variable and must never be stored
 in Git. HMAC pseudonymization reduces exposure, but it is not anonymization: the reference

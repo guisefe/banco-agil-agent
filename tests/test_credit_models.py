@@ -24,9 +24,8 @@ def test_credit_request_accepts_valid_final_decision() -> None:
     assert request.status == "aprovado"
 
 
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
+def test_credit_request_rejects_invalid_values() -> None:
+    invalid_cases: list[tuple[dict[str, object], str]] = [
         ({"customer_cpf": " "}, "customer_cpf"),
         (
             {"requested_at": datetime.now(timezone(timedelta(hours=-3)))},
@@ -36,14 +35,11 @@ def test_credit_request_accepts_valid_final_decision() -> None:
         ({"current_limit": Decimal("Infinity")}, "non-negative"),
         ({"requested_limit": Decimal("2500.00")}, "greater than"),
         ({"requested_limit": Decimal("NaN")}, "greater than"),
-    ],
-)
-def test_credit_request_rejects_invalid_values(
-    overrides: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        make_request(**overrides)
+    ]
+
+    for overrides, message in invalid_cases:
+        with pytest.raises(ValueError, match=message):
+            make_request(**overrides)
 
 
 def test_score_band_accepts_valid_values() -> None:
@@ -56,17 +52,14 @@ def test_score_band_accepts_valid_values() -> None:
     assert band.maximum_limit == Decimal("1000.00")
 
 
-@pytest.mark.parametrize(
-    ("minimum", "maximum"),
-    [(-1, 100), (200, 100), (0, 1001)],
-)
-def test_score_band_rejects_invalid_ranges(minimum: int, maximum: int) -> None:
-    with pytest.raises(ValueError, match="between 0 and 1000"):
-        ScoreBand(
-            minimum_score=minimum,
-            maximum_score=maximum,
-            maximum_limit=Decimal("1000.00"),
-        )
+def test_score_band_rejects_invalid_ranges() -> None:
+    for minimum, maximum in [(-1, 100), (200, 100), (0, 1001)]:
+        with pytest.raises(ValueError, match="between 0 and 1000"):
+            ScoreBand(
+                minimum_score=minimum,
+                maximum_score=maximum,
+                maximum_limit=Decimal("1000.00"),
+            )
 
 
 def test_score_band_rejects_negative_limit() -> None:

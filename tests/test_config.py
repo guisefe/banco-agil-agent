@@ -50,26 +50,20 @@ def test_settings_read_optional_exchange_api_key(tmp_path: Path) -> None:
     assert settings.exchange_api_key == "demo-key"
 
 
-@pytest.mark.parametrize(
-    "key_name",
-    [LLM_API_KEY_ENVIRONMENT_VARIABLE, GROQ_API_KEY_ENVIRONMENT_VARIABLE],
-)
-def test_settings_enable_llm_from_supported_key_names(
-    tmp_path: Path,
-    key_name: str,
-) -> None:
-    settings = load_settings(
-        project_root=tmp_path,
-        environment={
-            key_name: "demo-llm-key",
-            LLM_BASE_URL_ENVIRONMENT_VARIABLE: "https://llm.example/v1",
-            LLM_MODEL_ENVIRONMENT_VARIABLE: "demo-model",
-        },
-    )
+def test_settings_enable_llm_from_supported_key_names(tmp_path: Path) -> None:
+    for key_name in [LLM_API_KEY_ENVIRONMENT_VARIABLE, GROQ_API_KEY_ENVIRONMENT_VARIABLE]:
+        settings = load_settings(
+            project_root=tmp_path,
+            environment={
+                key_name: "demo-llm-key",
+                LLM_BASE_URL_ENVIRONMENT_VARIABLE: "https://llm.example/v1",
+                LLM_MODEL_ENVIRONMENT_VARIABLE: "demo-model",
+            },
+        )
 
-    assert settings.llm_api_key == "demo-llm-key"
-    assert settings.llm_base_url == "https://llm.example/v1"
-    assert settings.llm_model == "demo-model"
+        assert settings.llm_api_key == "demo-llm-key"
+        assert settings.llm_base_url == "https://llm.example/v1"
+        assert settings.llm_model == "demo-model"
 
 
 def test_settings_ignore_blank_llm_key_and_trim_configuration(tmp_path: Path) -> None:
@@ -87,9 +81,8 @@ def test_settings_ignore_blank_llm_key_and_trim_configuration(tmp_path: Path) ->
     assert settings.llm_model == "demo-model"
 
 
-@pytest.mark.parametrize(
-    "environment",
-    [
+def test_settings_reject_blank_llm_endpoint_or_model(tmp_path: Path) -> None:
+    invalid_environments = [
         {
             LLM_API_KEY_ENVIRONMENT_VARIABLE: "key",
             LLM_BASE_URL_ENVIRONMENT_VARIABLE: "",
@@ -98,14 +91,11 @@ def test_settings_ignore_blank_llm_key_and_trim_configuration(tmp_path: Path) ->
             LLM_API_KEY_ENVIRONMENT_VARIABLE: "key",
             LLM_MODEL_ENVIRONMENT_VARIABLE: "",
         },
-    ],
-)
-def test_settings_reject_blank_llm_endpoint_or_model(
-    tmp_path: Path,
-    environment: dict[str, str],
-) -> None:
-    with pytest.raises(ConfigurationError, match="LLM"):
-        load_settings(project_root=tmp_path, environment=environment)
+    ]
+
+    for environment in invalid_environments:
+        with pytest.raises(ConfigurationError, match="LLM"):
+            load_settings(project_root=tmp_path, environment=environment)
 
 
 def test_settings_reject_short_configured_key(tmp_path: Path) -> None:

@@ -63,13 +63,13 @@ def make_agent(
     )
 
 
-@pytest.mark.parametrize("message", ["dólar", "USD", "euro", "peso argentino", "libra", "iene"])
-def test_exchange_agent_accepts_supported_currency_terms(message: str) -> None:
-    state = make_agent().respond(authenticated_exchange_state(), message)
+def test_exchange_agent_accepts_supported_currency_terms() -> None:
+    for message in ["dólar", "USD", "euro", "peso argentino", "libra", "iene"]:
+        state = make_agent().respond(authenticated_exchange_state(), message)
 
-    assert state["active_agent"] == "triage"
-    assert "compra R$ 5,1234" in state["assistant_message"]
-    assert "venda R$ 5,1334" in state["assistant_message"]
+        assert state["active_agent"] == "triage"
+        assert "compra R$ 5,1234" in state["assistant_message"]
+        assert "venda R$ 5,1334" in state["assistant_message"]
 
 
 def test_exchange_agent_keeps_session_open_for_unsupported_currency() -> None:

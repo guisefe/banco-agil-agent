@@ -18,23 +18,19 @@ def make_customer(**overrides: object) -> Customer:
     return Customer(**values)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
+def test_customer_rejects_invalid_business_values() -> None:
+    invalid_cases: list[tuple[dict[str, object], str]] = [
         ({"cpf": " "}, "cpf"),
         ({"name": " "}, "name"),
         ({"credit_limit": Decimal("-0.01")}, "credit_limit"),
         ({"credit_limit": Decimal("Infinity")}, "credit_limit"),
         ({"credit_score": -1}, "credit_score"),
         ({"credit_score": 1001}, "credit_score"),
-    ],
-)
-def test_customer_rejects_invalid_business_values(
-    overrides: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        make_customer(**overrides)
+    ]
+
+    for overrides, message in invalid_cases:
+        with pytest.raises(ValueError, match=message):
+            make_customer(**overrides)
 
 
 def test_customer_accepts_valid_boundaries() -> None:

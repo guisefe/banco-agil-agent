@@ -183,25 +183,18 @@ def test_repository_failure_does_not_consume_customer_attempt() -> None:
     assert audit_writer.events[-1].reason_code == "CUSTOMER_REPOSITORY_UNAVAILABLE"
 
 
-@pytest.mark.parametrize(
-    ("message", "expected_agent"),
-    [
+def test_triage_routes_supported_intents() -> None:
+    scenarios = [
         ("Quero fazer uma entrevista financeira", "interview"),
         ("Quero uma entrevista de crédito", "interview"),
         ("Quero falar sobre crédito", "credit"),
         ("Qual é a cotação do dólar?", "exchange"),
-    ],
-)
-def test_triage_routes_supported_intents(
-    message: str,
-    expected_agent: str,
-) -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    state = authenticate(agent)
+    ]
 
-    state = agent.respond(state, message)
-
-    assert state["active_agent"] == expected_agent
+    for message, expected_agent in scenarios:
+        agent, _, _ = make_agent(customer=make_customer())
+        state = agent.respond(authenticate(agent), message)
+        assert state["active_agent"] == expected_agent
 
 
 def test_triage_routes_explicit_score_recalculation_to_interview() -> None:
@@ -282,21 +275,13 @@ def test_triage_does_not_block_llm_routing_when_telemetry_audit_fails() -> None:
     assert state["active_agent"] == "credit"
 
 
-@pytest.mark.parametrize(
-    "message",
-    ["Preciso de ajuda", "Quero ver meu limite e a cotação do dólar"],
-)
-def test_triage_requests_clarification_for_unknown_or_ambiguous_intent(
-    message: str,
-) -> None:
-    agent, _, _ = make_agent(customer=make_customer())
-    state = authenticate(agent)
-
-    state = agent.respond(state, message)
-
-    assert state["active_agent"] == "triage"
-    assert state["triage_stage"] == "awaiting_intent"
-    assert "Qual opção" in state["assistant_message"]
+def test_triage_requests_clarification_for_unknown_or_ambiguous_intent() -> None:
+    for message in ["Preciso de ajuda", "Quero ver meu limite e a cotação do dólar"]:
+        agent, _, _ = make_agent(customer=make_customer())
+        state = agent.respond(authenticate(agent), message)
+        assert state["active_agent"] == "triage"
+        assert state["triage_stage"] == "awaiting_intent"
+        assert "Qual opção" in state["assistant_message"]
 
 
 def test_user_can_end_conversation_before_authentication() -> None:

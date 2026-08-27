@@ -52,9 +52,8 @@ def test_score_formula_clamps_result_to_supported_range() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
+def test_financial_profile_rejects_invalid_values() -> None:
+    invalid_cases: list[tuple[dict[str, object], str]] = [
         ({"monthly_income": Decimal("-0.01")}, "monthly_income"),
         ({"monthly_income": Decimal("Infinity")}, "monthly_income"),
         ({"employment_type": "invalid"}, "employment_type"),
@@ -63,22 +62,22 @@ def test_score_formula_clamps_result_to_supported_range() -> None:
         ({"dependents": -1}, "dependents"),
         ({"dependents": True}, "dependents"),
         ({"has_active_debts": "sim"}, "has_active_debts"),
-    ],
-)
-def test_financial_profile_rejects_invalid_values(
-    overrides: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        make_profile(**overrides)
+    ]
+
+    for overrides, message in invalid_cases:
+        with pytest.raises(ValueError, match=message):
+            make_profile(**overrides)
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [("formal", "formal"), ("AUTÔNOMO", "autonomo"), ("desempregado", "desempregado")],
-)
-def test_parse_employment_type_accepts_supported_values(value: str, expected: str) -> None:
-    assert parse_employment_type(value) == expected
+def test_parse_employment_type_accepts_supported_values() -> None:
+    valid_cases = [
+        ("formal", "formal"),
+        ("AUTÔNOMO", "autonomo"),
+        ("desempregado", "desempregado"),
+    ]
+
+    for value, expected in valid_cases:
+        assert parse_employment_type(value) == expected
 
 
 def test_parse_employment_type_rejects_unknown_value() -> None:
@@ -86,20 +85,20 @@ def test_parse_employment_type_rejects_unknown_value() -> None:
         parse_employment_type("informal")
 
 
-@pytest.mark.parametrize(("value", "expected"), [("0", 0), ("2", 2), ("3+", 3)])
-def test_parse_dependents_accepts_non_negative_integer(value: str, expected: int) -> None:
-    assert parse_dependents(value) == expected
+def test_parse_dependents_accepts_non_negative_integer() -> None:
+    for value, expected in [("0", 0), ("2", 2), ("3+", 3)]:
+        assert parse_dependents(value) == expected
 
 
-@pytest.mark.parametrize("value", ["", "-1", "1.5", "dois", "²"])
-def test_parse_dependents_rejects_invalid_value(value: str) -> None:
-    with pytest.raises(ValueError, match="dependents"):
-        parse_dependents(value)
+def test_parse_dependents_rejects_invalid_value() -> None:
+    for value in ["", "-1", "1.5", "dois", "²"]:
+        with pytest.raises(ValueError, match="dependents"):
+            parse_dependents(value)
 
 
-@pytest.mark.parametrize(("value", "expected"), [("sim", True), ("NÃO", False)])
-def test_parse_debt_answer_accepts_yes_or_no(value: str, expected: bool) -> None:
-    assert parse_debt_answer(value) is expected
+def test_parse_debt_answer_accepts_yes_or_no() -> None:
+    for value, expected in [("sim", True), ("NÃO", False)]:
+        assert parse_debt_answer(value) is expected
 
 
 def test_parse_debt_answer_rejects_ambiguous_value() -> None:

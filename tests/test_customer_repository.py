@@ -47,9 +47,8 @@ def test_csv_repository_returns_none_for_identity_mismatch(tmp_path: Path) -> No
     assert customer is None
 
 
-@pytest.mark.parametrize(
-    ("content", "message"),
-    [
+def test_csv_repository_reports_controlled_data_errors(tmp_path: Path) -> None:
+    invalid_cases = [
         ("", "no header"),
         ("cpf,nome\n00000000000,Ana\n", "invalid schema"),
         (
@@ -63,22 +62,17 @@ def test_csv_repository_returns_none_for_identity_mismatch(tmp_path: Path) -> No
             "00000000000,Ana duplicada,1990-05-20,1000,650\n",
             "duplicated",
         ),
-    ],
-)
-def test_csv_repository_reports_controlled_data_errors(
-    tmp_path: Path,
-    content: str,
-    message: str,
-) -> None:
-    customer_file = tmp_path / "clientes.csv"
-    customer_file.write_text(content, encoding="utf-8")
-    repository = CsvCustomerRepository(customer_file)
+    ]
 
-    with pytest.raises(CustomerRepositoryError, match=message):
-        repository.find_by_identity(
-            cpf="00000000000",
-            birth_date=date(1990, 5, 20),
-        )
+    for content, message in invalid_cases:
+        customer_file = tmp_path / "clientes.csv"
+        customer_file.write_text(content, encoding="utf-8")
+        repository = CsvCustomerRepository(customer_file)
+        with pytest.raises(CustomerRepositoryError, match=message):
+            repository.find_by_identity(
+                cpf="00000000000",
+                birth_date=date(1990, 5, 20),
+            )
 
 
 def test_csv_repository_wraps_file_errors(tmp_path: Path) -> None:
@@ -208,12 +202,12 @@ def test_csv_repository_rejects_invalid_credit_updates(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("score", [-1, 1001, True])
-def test_csv_repository_rejects_invalid_score_updates(tmp_path: Path, score: int) -> None:
+def test_csv_repository_rejects_invalid_score_updates(tmp_path: Path) -> None:
     repository = CsvCustomerRepository(tmp_path / "unused.csv")
 
-    with pytest.raises(CustomerRepositoryError, match="between 0 and 1000"):
-        repository.update_credit_score(cpf="00000000000", credit_score=score)
+    for score in [-1, 1001, True]:
+        with pytest.raises(CustomerRepositoryError, match="between 0 and 1000"):
+            repository.update_credit_score(cpf="00000000000", credit_score=score)
 
 
 def test_csv_repository_rejects_duplicate_cpf_for_credit_operations(tmp_path: Path) -> None:

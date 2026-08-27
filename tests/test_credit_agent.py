@@ -207,17 +207,12 @@ def test_credit_agent_distinguishes_missing_score_from_zero() -> None:
     assert "0 de 1000" in state["assistant_message"]
 
 
-@pytest.mark.parametrize(
-    "message",
-    ["ajuda", "consultar e aumentar meu limite"],
-)
-def test_credit_agent_clarifies_unknown_or_ambiguous_action(message: str) -> None:
-    agent, _, _, _, _ = make_agent()
-
-    state = agent.respond(make_state(), message)
-
-    assert state["active_agent"] == "credit"
-    assert "consultar" in state["assistant_message"]
+def test_credit_agent_clarifies_unknown_or_ambiguous_action() -> None:
+    for message in ["ajuda", "consultar e aumentar meu limite"]:
+        agent, _, _, _, _ = make_agent()
+        state = agent.respond(make_state(), message)
+        assert state["active_agent"] == "credit"
+        assert "consultar" in state["assistant_message"]
 
 
 def test_credit_agent_collects_requested_limit() -> None:
@@ -229,15 +224,12 @@ def test_credit_agent_collects_requested_limit() -> None:
     assert "novo limite" in state["assistant_message"]
 
 
-@pytest.mark.parametrize("message", ["valor inválido", "0"])
-def test_credit_agent_rejects_invalid_requested_limit(message: str) -> None:
-    agent, _, _, requests, _ = make_agent()
-    state = start_limit_request(agent)
-
-    state = agent.respond(state, message)
-
-    assert state["credit_stage"] == "awaiting_requested_limit"
-    assert not requests.requests
+def test_credit_agent_rejects_invalid_requested_limit() -> None:
+    for message in ["valor inválido", "0"]:
+        agent, _, _, requests, _ = make_agent()
+        state = agent.respond(start_limit_request(agent), message)
+        assert state["credit_stage"] == "awaiting_requested_limit"
+        assert not requests.requests
 
 
 def test_credit_agent_requires_increase_over_current_limit() -> None:
@@ -414,21 +406,18 @@ def test_credit_agent_handles_pending_finalization_failures() -> None:
     assert "Não foi possível" in rejected["assistant_message"]
 
 
-@pytest.mark.parametrize("failure", ["audit", "request"])
-def test_credit_agent_handles_missing_score_deferral_failure(failure: str) -> None:
-    customer = replace(make_customer(), credit_score=None)
-    requests = CreditRequestRepositoryStub(error=failure == "request")
-    audit = AuditWriterStub(error=failure == "audit")
-    agent, _, _, _, _ = make_agent(
-        customer_repository=CustomerRepositoryStub(customer),
-        request_repository=requests,
-        audit_writer=audit,
-    )
-    state = start_limit_request(agent)
-
-    state = agent.respond(state, "6000")
-
-    assert "Não foi possível" in state["assistant_message"]
+def test_credit_agent_handles_missing_score_deferral_failure() -> None:
+    for failure in ["audit", "request"]:
+        customer = replace(make_customer(), credit_score=None)
+        requests = CreditRequestRepositoryStub(error=failure == "request")
+        audit = AuditWriterStub(error=failure == "audit")
+        agent, _, _, _, _ = make_agent(
+            customer_repository=CustomerRepositoryStub(customer),
+            request_repository=requests,
+            audit_writer=audit,
+        )
+        state = agent.respond(start_limit_request(agent), "6000")
+        assert "Não foi possível" in state["assistant_message"]
 
 
 def test_credit_agent_handles_missing_cpf_while_finalizing_decline() -> None:
@@ -443,17 +432,15 @@ def test_credit_agent_handles_missing_cpf_while_finalizing_decline() -> None:
     assert "Não foi possível" in state["assistant_message"]
 
 
-@pytest.mark.parametrize("missing", [True, False])
-def test_credit_agent_handles_missing_or_unavailable_customer(missing: bool) -> None:
-    repository = CustomerRepositoryStub(
-        None if missing else make_customer(),
-        get_error=not missing,
-    )
-    agent, _, _, _, _ = make_agent(customer_repository=repository)
-
-    state = agent.respond(make_state(), "consultar limite")
-
-    assert "Não foi possível" in state["assistant_message"]
+def test_credit_agent_handles_missing_or_unavailable_customer() -> None:
+    for missing in [True, False]:
+        repository = CustomerRepositoryStub(
+            None if missing else make_customer(),
+            get_error=not missing,
+        )
+        agent, _, _, _, _ = make_agent(customer_repository=repository)
+        state = agent.respond(make_state(), "consultar limite")
+        assert "Não foi possível" in state["assistant_message"]
 
 
 def test_credit_agent_handles_missing_customer_during_request() -> None:

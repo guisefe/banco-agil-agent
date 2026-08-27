@@ -39,35 +39,33 @@ def test_repository_returns_validated_quote_and_optional_api_key() -> None:
     assert observed_headers["x-api-key"] == "demo-key"
 
 
-@pytest.mark.parametrize("currency", ["CAD", ""])
-def test_repository_rejects_unsupported_currency_before_network_call(currency: str) -> None:
+def test_repository_rejects_unsupported_currency_before_network_call() -> None:
     repository = AwesomeApiExchangeRateRepository(
         client=httpx.Client(transport=httpx.MockTransport(make_response))
     )
 
-    with pytest.raises(ValueError, match="supported"):
-        repository.get_brl_quote(currency=currency)
+    for currency in ["CAD", ""]:
+        with pytest.raises(ValueError, match="supported"):
+            repository.get_brl_quote(currency=currency)
 
 
-@pytest.mark.parametrize(
-    "response",
-    [
+def test_repository_wraps_unsuccessful_or_invalid_provider_responses() -> None:
+    invalid_responses = [
         httpx.Response(500),
         httpx.Response(200, json=[]),
         httpx.Response(200, json={}),
         httpx.Response(200, json={"USDBRL": []}),
         httpx.Response(200, json={"USDBRL": {"bid": "invalid", "ask": "5", "timestamp": "1"}}),
-    ],
-)
-def test_repository_wraps_unsuccessful_or_invalid_provider_responses(
-    response: httpx.Response,
-) -> None:
-    repository = AwesomeApiExchangeRateRepository(
-        client=httpx.Client(transport=httpx.MockTransport(lambda _: response))
-    )
+    ]
 
-    with pytest.raises(ExchangeRateUnavailableError):
-        repository.get_brl_quote(currency="USD")
+    for response in invalid_responses:
+        repository = AwesomeApiExchangeRateRepository(
+            client=httpx.Client(
+                transport=httpx.MockTransport(lambda _, response=response: response)
+            )
+        )
+        with pytest.raises(ExchangeRateUnavailableError):
+            repository.get_brl_quote(currency="USD")
 
 
 def test_repository_retries_transport_failure_once() -> None:

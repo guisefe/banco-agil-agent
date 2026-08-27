@@ -135,30 +135,23 @@ def test_interview_preserves_pending_limit_for_credit_reanalysis() -> None:
     assert "reanalisar" in state["assistant_message"]
 
 
-@pytest.mark.parametrize(
-    ("answers", "stage", "message"),
-    [
+def test_interview_reprompts_invalid_answers_without_advancing() -> None:
+    invalid_scenarios = [
         (("invalid",), "awaiting_income", "renda"),
         (("5000", "informal"), "awaiting_employment", "opções"),
         (("5000", "formal", "invalid"), "awaiting_expenses", "despesas"),
         (("5000", "formal", "2500", "1.5"), "awaiting_dependents", "inteiro"),
         (("5000", "formal", "2500", "1", "talvez"), "awaiting_debts", "sim ou não"),
-    ],
-)
-def test_interview_reprompts_invalid_answers_without_advancing(
-    answers: tuple[str, ...],
-    stage: str,
-    message: str,
-) -> None:
-    agent, customers, _ = make_agent()
-    state = make_state()
+    ]
 
-    for answer in answers:
-        state = agent.respond(state, answer)
-
-    assert state["interview_stage"] == stage
-    assert message in state["assistant_message"]
-    assert not customers.updates
+    for answers, stage, message in invalid_scenarios:
+        agent, customers, _ = make_agent()
+        state = make_state()
+        for answer in answers:
+            state = agent.respond(state, answer)
+        assert state["interview_stage"] == stage
+        assert message in state["assistant_message"]
+        assert not customers.updates
     assert state["user_message"] == "[REDACTED_FINANCIAL_INPUT]"
 
 
@@ -221,18 +214,16 @@ def test_interview_reports_unrecoverable_rollback_failure() -> None:
     assert "com segurança" in state["assistant_message"]
 
 
-@pytest.mark.parametrize("missing", [True, False])
-def test_interview_handles_missing_or_unavailable_customer(missing: bool) -> None:
-    customers = CustomerRepositoryStub(
-        error=not missing,
-        customer=None if missing else CustomerRepositoryStub().customer,
-    )
-    agent, _, _ = make_agent(customer_repository=customers)
-
-    state = complete_interview(agent, make_state())
-
-    assert state["active_agent"] == "interview"
-    assert "Não foi possível" in state["assistant_message"]
+def test_interview_handles_missing_or_unavailable_customer() -> None:
+    for missing in [True, False]:
+        customers = CustomerRepositoryStub(
+            error=not missing,
+            customer=None if missing else CustomerRepositoryStub().customer,
+        )
+        agent, _, _ = make_agent(customer_repository=customers)
+        state = complete_interview(agent, make_state())
+        assert state["active_agent"] == "interview"
+        assert "Não foi possível" in state["assistant_message"]
 
 
 def test_interview_rejects_invalid_lifecycle_and_configuration() -> None:

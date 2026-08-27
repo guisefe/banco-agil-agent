@@ -34,6 +34,7 @@ def test_bootstrap_connects_real_adapters_and_workflow(tmp_path: Path) -> None:
     state = application.workflow.respond(state, "20/05/1990")
 
     assert application.uses_ephemeral_audit_key is False
+    assert application.uses_llm is False
     assert state["authenticated"] is True
     assert settings.audit_file.exists()
 
@@ -41,3 +42,21 @@ def test_bootstrap_connects_real_adapters_and_workflow(tmp_path: Path) -> None:
     state = application.workflow.respond(state, "consultar limite atual")
 
     assert "R$ 2.500,00" in state["assistant_message"]
+
+
+def test_bootstrap_marks_llm_as_enabled_when_key_is_configured(tmp_path: Path) -> None:
+    settings = Settings(
+        project_root=tmp_path,
+        customer_file=tmp_path / "clientes.csv",
+        score_policy_file=tmp_path / "score_limite.csv",
+        credit_request_file=tmp_path / "solicitacoes.csv",
+        audit_file=tmp_path / "audit.jsonl",
+        exchange_api_key=None,
+        pseudonymization_key=b"test-only-pseudonymization-key-32-bytes",
+        uses_ephemeral_audit_key=False,
+        llm_api_key="configured-key",
+    )
+
+    application = build_application(settings=settings)
+
+    assert application.uses_llm is True

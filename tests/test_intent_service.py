@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, cast
 
 import httpx
@@ -32,6 +33,12 @@ def test_deterministic_interpreter_classifies_supported_messages() -> None:
         assert result.intent == expected_intent
         assert result.currency == expected_currency
         assert result.source == "deterministic"
+    assert DeterministicIntentInterpreter().interpret(
+        "quero limite de R$ 6.000,00"
+    ).requested_limit == Decimal("6000.00")
+    assert (
+        DeterministicIntentInterpreter().interpret("quero limite de 6 mil").requested_limit is None
+    )
 
 
 def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
@@ -50,6 +57,7 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
                                 {
                                     "intent": "credit_limit_increase",
                                     "currency": None,
+                                    "requested_limit": 5000,
                                 }
                             )
                         }
@@ -72,6 +80,7 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
     assert result == IntentInterpretation(
         intent="credit_limit_increase",
         source="llm",
+        requested_limit=Decimal("5000.00"),
     )
     assert captured_request is not None
     assert str(captured_request.url) == "https://llm.example/v1/chat/completions"
@@ -82,8 +91,8 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
     assert "Nunca autentique" in request_body["messages"][0]["content"]
     sent_message = request_body["messages"][1]["content"]
     assert "000.000.000-00" not in sent_message
-    assert "5000" not in sent_message
-    assert "[NUMBER]" in sent_message
+    assert "5000" in sent_message
+    assert "[CPF]" in sent_message
 
 
 def test_llm_interpreter_rejects_transport_and_schema_failures() -> None:
@@ -102,14 +111,14 @@ def test_llm_interpreter_rejects_transport_and_schema_failures() -> None:
         httpx.Response(
             200,
             json={
-                "choices": [{"message": {"content": '{"intent":"approve_credit","currency":null}'}}]
-            },
-        ),
-        httpx.Response(
-            200,
-            json={
                 "choices": [
-                    {"message": {"content": '{"intent":"credit_limit_query","currency":"USD"}'}}
+                    {
+                        "message": {
+                            "content": (
+                                '{"intent":"approve_credit","currency":null,"requested_limit":null}'
+                            )
+                        }
+                    }
                 ]
             },
         ),
@@ -117,7 +126,44 @@ def test_llm_interpreter_rejects_transport_and_schema_failures() -> None:
             200,
             json={
                 "choices": [
-                    {"message": {"content": ('{"intent":"exchange_quote","currency":"CAD"}')}}
+                    {
+                        "message": {
+                            "content": (
+                                '{"intent":"credit_limit_query","currency":"USD",'
+                                '"requested_limit":null}'
+                            )
+                        }
+                    }
+                ]
+            },
+        ),
+        httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"intent":"exchange_quote","currency":"CAD",'
+                                '"requested_limit":null}'
+                            )
+                        }
+                    }
+                ]
+            },
+        ),
+        httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"intent":"credit_limit_increase","currency":null,'
+                                '"requested_limit":-1}'
+                            )
+                        }
+                    }
                 ]
             },
         ),
@@ -192,6 +238,16 @@ def test_intent_model_rejects_invalid_combinations() -> None:
         {"intent": "forbidden", "source": "llm"},
         {"intent": "exchange_quote", "source": "llm", "currency": "CAD"},
         {"intent": "credit_limit_query", "source": "llm", "currency": "USD"},
+        {
+            "intent": "credit_limit_query",
+            "source": "llm",
+            "requested_limit": Decimal("1000"),
+        },
+        {
+            "intent": "credit_limit_increase",
+            "source": "llm",
+            "requested_limit": Decimal("NaN"),
+        },
     ]
 
     for arguments in invalid_combinations:

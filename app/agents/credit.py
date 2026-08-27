@@ -106,7 +106,12 @@ class CreditAgent:
             )
             return state
         if action == "increase":
+            interpreted_limit = state["interpreted_requested_limit"]
+            state["interpreted_requested_limit"] = None
             state["credit_stage"] = "awaiting_requested_limit"
+            if interpreted_limit is not None:
+                with _CREDIT_DECISION_LOCK:
+                    return self._decide_request(state, interpreted_limit)
             state["assistant_message"] = "Qual é o novo limite total que você deseja?"
             return state
 

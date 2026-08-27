@@ -182,7 +182,11 @@ def test_workflow_answers_score_query_in_same_turn_as_triage_handoff() -> None:
 @dataclass
 class LlmIntentInterpreterStub:
     def interpret(self, message: str) -> IntentInterpretation:
-        return IntentInterpretation(intent="credit_limit_increase", source="llm")
+        return IntentInterpretation(
+            intent="credit_limit_increase",
+            source="llm",
+            requested_limit=Decimal("4000.00"),
+        )
 
 
 def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
@@ -191,12 +195,11 @@ def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
     state = workflow.respond(state, "00000000000")
     state = workflow.respond(state, "20/05/1990")
 
-    state = workflow.respond(state, "preciso de um fôlego maior no cartão")
+    state = workflow.respond(state, "preciso de um fôlego de quatro mil no cartão")
 
     assert state["turn_number"] == 3
-    assert state["active_agent"] == "credit"
-    assert state["credit_stage"] == "awaiting_requested_limit"
-    assert "novo limite" in state["assistant_message"]
+    assert state["active_agent"] == "triage"
+    assert "R$ 4.000,00" in state["assistant_message"]
 
 
 def test_workflow_routes_existing_exchange_state_from_graph_start() -> None:

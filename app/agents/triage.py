@@ -224,6 +224,7 @@ class TriageAgent:
         if destination is None:
             state["interpreted_intent"] = None
             state["interpreted_currency"] = None
+            state["interpreted_requested_limit"] = None
             state["assistant_message"] = (
                 "Posso ajudar com limite ou aumento de crédito, entrevista financeira "
                 "ou cotação de moedas. Qual opção você deseja?"
@@ -234,6 +235,7 @@ class TriageAgent:
         state["handoff_pending"] = True
         state["interpreted_intent"] = interpretation.intent
         state["interpreted_currency"] = interpretation.currency
+        state["interpreted_requested_limit"] = interpretation.requested_limit
         state["assistant_message"] = _handoff_message(destination)
         self._append_event(
             AuditEvent(

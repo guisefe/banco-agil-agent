@@ -240,7 +240,8 @@ class TriageAgent:
             state["interpreted_currency"] = None
             state["interpreted_requested_limit"] = None
             state["assistant_message"] = (
-                "Posso ajudar com limite ou aumento de crédito, entrevista financeira "
+                "Posso ajudar a consultar ou ajustar seu limite, informar seu score, realizar "
+                "uma entrevista financeira "
                 "ou cotação de moedas. Qual opção você deseja?"
             )
             return state
@@ -349,7 +350,7 @@ def _destination_for(intent: IntentName) -> DestinationAgent | None:
         "credit_menu",
         "credit_limit_query",
         "credit_score_query",
-        "credit_limit_increase",
+        "credit_limit_adjustment",
     }:
         return "credit"
     if intent == "credit_interview":
@@ -372,8 +373,11 @@ def _is_affirmative_response(message: str) -> bool:
     return _normalized_confirmation(message) in {
         "sim",
         "sim pode",
+        "sim pode finalizar",
+        "sim pode encerrar",
         "pode",
         "pode encerrar",
+        "pode finalizar",
         "claro",
         "por favor",
     }
@@ -385,6 +389,11 @@ def _is_negative_response(message: str) -> bool:
         "nao quero",
         "nao pode",
         "ainda nao",
+        "por enquanto nao",
+        "nao preciso de mais nada",
+        "nao preciso de outro servico",
+        "nao quero fazer mais nada",
+        "nao quero fazer mais nada por enquanto",
         "quero continuar",
     }
 

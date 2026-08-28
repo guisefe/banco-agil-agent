@@ -111,6 +111,18 @@ def test_streamlit_app_can_reset_an_active_conversation() -> None:
     assert "CPF" in app.chat_message[0].markdown[0].value
 
 
+def test_streamlit_app_blocks_after_three_identity_mismatches() -> None:
+    app = make_app_test().run()
+
+    for _ in range(3):
+        app.chat_input[0].set_value("00000000000").run()
+        app.chat_input[0].set_value("01/01/2000").run()
+
+    assert not app.exception
+    assert app.chat_input[0].disabled is True
+    assert "três tentativas" in app.chat_message[-1].markdown[0].value
+
+
 def test_streamlit_app_completes_exchange_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

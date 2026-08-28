@@ -21,8 +21,9 @@ def test_deterministic_interpreter_classifies_supported_messages() -> None:
     scenarios = [
         ("quero consultar meu limite", "credit_limit_query", None),
         ("qual é meu score?", "credit_score_query", None),
-        ("preciso de um limite maior", "credit_limit_increase", None),
-        ("quero limite de 6000", "credit_limit_increase", None),
+        ("preciso de um limite maior", "credit_limit_adjustment", None),
+        ("quero limite de 6000", "credit_limit_adjustment", None),
+        ("quero reduzir meu limite para 2000", "credit_limit_adjustment", None),
         ("quero falar sobre crédito", "credit_menu", None),
         ("quero recalcular meu score", "credit_interview", None),
         ("qual a cotação do dólar?", "exchange_quote", "USD"),
@@ -58,7 +59,7 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
                         "message": {
                             "content": json.dumps(
                                 {
-                                    "intent": "credit_limit_increase",
+                                    "intent": "credit_limit_adjustment",
                                     "currency": None,
                                     "requested_limit": 5000,
                                 }
@@ -81,7 +82,7 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
     )
 
     assert result == IntentInterpretation(
-        intent="credit_limit_increase",
+        intent="credit_limit_adjustment",
         source="llm",
         requested_limit=Decimal("5000.00"),
     )
@@ -186,7 +187,7 @@ def test_llm_interpreter_rejects_transport_and_schema_failures() -> None:
                     {
                         "message": {
                             "content": (
-                                '{"intent":"credit_limit_increase","currency":null,'
+                                '{"intent":"credit_limit_adjustment","currency":null,'
                                 '"requested_limit":-1}'
                             )
                         }
@@ -283,7 +284,7 @@ def test_intent_model_rejects_invalid_combinations() -> None:
             "requested_limit": Decimal("1000"),
         },
         {
-            "intent": "credit_limit_increase",
+            "intent": "credit_limit_adjustment",
             "source": "llm",
             "requested_limit": Decimal("NaN"),
         },

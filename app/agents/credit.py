@@ -26,7 +26,7 @@ from app.services.understanding import (
 from app.tools.conversation import normalize_text
 from app.tools.money import format_brl, parse_money
 
-CreditAction = Literal["query_limit", "query_score", "increase"]
+CreditAction = Literal["query_limit", "query_score", "adjust"]
 
 _ACTION_TERMS: Mapping[CreditAction, frozenset[str]] = {
     "query_limit": frozenset(
@@ -35,8 +35,19 @@ _ACTION_TERMS: Mapping[CreditAction, frozenset[str]] = {
     "query_score": frozenset(
         {"consultar score", "consulta de score", "qual meu score", "saber meu score", "ver score"}
     ),
-    "increase": frozenset(
-        {"aumentar", "aumento", "novo limite", "mais limite", "solicitar limite"}
+    "adjust": frozenset(
+        {
+            "ajustar",
+            "ajuste",
+            "aumentar",
+            "aumento",
+            "reduzir",
+            "reducao",
+            "diminuir",
+            "novo limite",
+            "mais limite",
+            "solicitar limite",
+        }
     ),
 }
 _CREDIT_DECISION_LOCK = Lock()
@@ -83,7 +94,9 @@ class CreditAgent:
         if state["credit_stage"] == "awaiting_action":
             return self._choose_action(next_state, user_message)
         if state["credit_stage"] == "awaiting_requested_limit":
-            return self._analyze_request(next_state, user_message)
+            return self._analyze_adjustment(next_state, user_message)
+        if state["credit_stage"] == "confirming_limit_reduction":
+            return self._handle_limit_reduction_confirmation(next_state, user_message)
         if state["credit_stage"] == "offering_interview":
             return self._handle_interview_offer(next_state, user_message)
         raise ValueError("credit agent is not ready to receive a user message")
@@ -96,7 +109,7 @@ class CreditAgent:
         next_state = state.copy()
         next_state["credit_stage"] = "awaiting_requested_limit"
         with _CREDIT_DECISION_LOCK:
-            return self._decide_request(next_state, requested_limit, reanalysis=True)
+            return self._process_adjustment(next_state, requested_limit, reanalysis=True)
 
     def _choose_action(
         self,
@@ -115,17 +128,17 @@ class CreditAgent:
             action = _identify_action(user_message)
         if action is None:
             state["assistant_message"] = (
-                "Posso consultar seu limite, informar seu score interno ou solicitar "
-                "um aumento. O que você deseja?"
+                "Posso consultar ou ajustar seu limite e informar seu score interno. "
+                "O que você deseja?"
             )
             return state
-        if action == "increase":
+        if action == "adjust":
             interpreted_limit = state["interpreted_requested_limit"]
             state["interpreted_requested_limit"] = None
             state["credit_stage"] = "awaiting_requested_limit"
             if interpreted_limit is not None:
                 with _CREDIT_DECISION_LOCK:
-                    return self._decide_request(state, interpreted_limit)
+                    return self._process_adjustment(state, interpreted_limit)
             state["assistant_message"] = "Qual é o novo limite total que você deseja?"
             return state
 
@@ -155,7 +168,7 @@ class CreditAgent:
         )
         return self._return_to_triage(state, reason_code="CREDIT_LIMIT_QUERIED")
 
-    def _analyze_request(
+    def _analyze_adjustment(
         self,
         state: ConversationState,
         user_message: str,
@@ -177,9 +190,9 @@ class CreditAgent:
                 return state
 
         with _CREDIT_DECISION_LOCK:
-            return self._decide_request(state, requested_limit)
+            return self._process_adjustment(state, requested_limit)
 
-    def _decide_request(
+    def _process_adjustment(
         self,
         state: ConversationState,
         requested_limit: Decimal,
@@ -190,31 +203,46 @@ class CreditAgent:
         customer = self._load_customer(state)
         if customer is None:
             return self._repository_failure(state)
-        if requested_limit <= customer.credit_limit:
-            if reanalysis:
-                try:
-                    pending_requested_at = self._pending_requested_at(state)
-                    if pending_requested_at is not None:
-                        self._requests.finalize_pending(
-                            customer_cpf=customer.cpf,
-                            requested_at=pending_requested_at,
-                            status="aprovado",
-                        )
-                except CreditRepositoryError:
-                    return self._repository_failure(state)
-                state["requested_credit_limit"] = None
-                state["pending_credit_requested_at"] = None
-                state["assistant_message"] = (
-                    f"Seu limite atual de {format_brl(customer.credit_limit)} "
-                    "já atende ao valor solicitado. Posso ajudar com outro assunto?"
-                )
-                return self._return_to_triage(
-                    state,
-                    reason_code="CREDIT_REANALYSIS_ALREADY_SATISFIED",
-                    tolerate_audit_failure=True,
-                )
+        if reanalysis and requested_limit <= customer.credit_limit:
+            try:
+                pending_requested_at = self._pending_requested_at(state)
+                if pending_requested_at is not None:
+                    self._requests.finalize_pending(
+                        customer_cpf=customer.cpf,
+                        requested_at=pending_requested_at,
+                        status="aprovado",
+                    )
+            except CreditRepositoryError:
+                return self._repository_failure(state)
+            state["requested_credit_limit"] = None
+            state["pending_credit_requested_at"] = None
             state["assistant_message"] = (
-                f"O novo limite deve ser maior que o atual, de {format_brl(customer.credit_limit)}."
+                f"Seu limite atual de {format_brl(customer.credit_limit)} "
+                "já atende ao valor solicitado. Posso ajudar com outro assunto?"
+            )
+            return self._return_to_triage(
+                state,
+                reason_code="CREDIT_REANALYSIS_ALREADY_SATISFIED",
+                tolerate_audit_failure=True,
+            )
+        if requested_limit == customer.credit_limit:
+            state["requested_credit_limit"] = None
+            state["assistant_message"] = (
+                f"Seu limite já está ajustado em {format_brl(customer.credit_limit)}. "
+                "Posso ajudar com outro assunto?"
+            )
+            return self._return_to_triage(
+                state,
+                reason_code="CREDIT_LIMIT_ALREADY_SET",
+                tolerate_audit_failure=True,
+            )
+        if requested_limit < customer.credit_limit:
+            state["requested_credit_limit"] = requested_limit
+            state["credit_stage"] = "confirming_limit_reduction"
+            state["assistant_message"] = (
+                f"Seu limite atual é {format_brl(customer.credit_limit)}. "
+                f"Você deseja reduzi-lo para {format_brl(requested_limit)}? "
+                "Responda sim ou não."
             )
             return state
 
@@ -292,6 +320,79 @@ class CreditAgent:
             "Você deseja realizar uma entrevista financeira para recalcular o score?"
         )
         return state
+
+    def _handle_limit_reduction_confirmation(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
+        answer = _parse_yes_no(user_message)
+        if answer is None:
+            interpretation = self._field_interpreter.interpret_field(
+                user_message,
+                expected="yes_no",
+            )
+            state["last_interpretation_source"] = interpretation.source
+            answer = _parse_yes_no(interpretation.value or "")
+        if answer is None:
+            state["assistant_message"] = (
+                "Você deseja confirmar a redução do limite? Responda sim ou não."
+            )
+            return state
+        if not answer:
+            state["requested_credit_limit"] = None
+            state["assistant_message"] = (
+                "Tudo bem, seu limite atual foi mantido. Posso ajudar com outro assunto?"
+            )
+            return self._return_to_triage(
+                state,
+                reason_code="CREDIT_LIMIT_REDUCTION_CANCELLED",
+                tolerate_audit_failure=True,
+            )
+
+        requested_limit = state["requested_credit_limit"]
+        if requested_limit is None:
+            return self._repository_failure(state)
+        with _CREDIT_DECISION_LOCK:
+            customer = self._load_customer(state)
+            if customer is None or requested_limit >= customer.credit_limit:
+                return self._repository_failure(state)
+            try:
+                self._customers.update_credit_limit(
+                    cpf=customer.cpf,
+                    credit_limit=requested_limit,
+                )
+                try:
+                    self._audit_writer.append(
+                        AuditEvent(
+                            event_type="credit_limit_adjusted",
+                            conversation_id=state["conversation_id"],
+                            turn_number=state["turn_number"],
+                            agent="credit",
+                            outcome="success",
+                            reason_code="CREDIT_LIMIT_REDUCTION_CONFIRMED",
+                            subject_ref=self._subject_ref(state),
+                        )
+                    )
+                except AuditWriteError:
+                    self._customers.update_credit_limit(
+                        cpf=customer.cpf,
+                        credit_limit=customer.credit_limit,
+                    )
+                    raise
+            except (AuditWriteError, CustomerRepositoryError):
+                return self._repository_failure(state)
+
+        state["requested_credit_limit"] = None
+        state["assistant_message"] = (
+            f"Seu limite foi reduzido para {format_brl(requested_limit)}. "
+            "Posso ajudar com outro assunto?"
+        )
+        return self._return_to_triage(
+            state,
+            reason_code="CREDIT_LIMIT_REDUCED",
+            tolerate_audit_failure=True,
+        )
 
     def _persist_approved_request(
         self,
@@ -535,14 +636,14 @@ def _action_from_interpretation(intent: IntentName | None) -> CreditAction | Non
     actions: Mapping[IntentName, CreditAction] = {
         "credit_limit_query": "query_limit",
         "credit_score_query": "query_score",
-        "credit_limit_increase": "increase",
+        "credit_limit_adjustment": "adjust",
     }
     return actions.get(intent)
 
 
 def _parse_yes_no(message: str) -> bool | None:
-    normalized_message = normalize_text(message)
-    if normalized_message in {"sim", "quero", "aceito", "pode ser"}:
+    normalized_message = normalize_text(message).translate(str.maketrans("", "", ".,!?"))
+    if normalized_message in {"sim", "sim pode", "pode", "quero", "aceito", "pode ser"}:
         return True
     if normalized_message in {"nao", "nao quero", "agora nao", "recuso"}:
         return False

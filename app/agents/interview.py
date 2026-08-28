@@ -216,8 +216,7 @@ class CreditInterviewAgent:
         completed_state["credit_stage"] = "awaiting_action"
         if completed_state["requested_credit_limit"] is None:
             completed_state["assistant_message"] = (
-                "Seu score foi recalculado. Você deseja consultar seu limite "
-                "ou solicitar um aumento?"
+                "Seu score foi recalculado. Você deseja consultar ou ajustar seu limite?"
             )
         else:
             completed_state["assistant_message"] = (

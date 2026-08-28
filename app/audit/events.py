@@ -12,6 +12,7 @@ AuditEventType = Literal[
     "intent_interpreted",
     "agent_handoff",
     "credit_decision_made",
+    "credit_limit_adjusted",
     "credit_assessment_deferred",
     "customer_profile_updated",
     "exchange_quote_requested",

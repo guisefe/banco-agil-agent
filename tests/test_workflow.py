@@ -200,7 +200,7 @@ class LlmIntentInterpreterStub:
                 currency="USD",
             )
         return IntentInterpretation(
-            intent="credit_limit_increase",
+            intent="credit_limit_adjustment",
             source="llm",
             requested_limit=Decimal("4000.00"),
         )
@@ -311,7 +311,7 @@ def test_workflow_confirms_end_when_customer_declines_more_help() -> None:
     state = workflow.respond(state, "20/05/1990")
     state = workflow.respond(state, "quero saber meu limite")
 
-    state = workflow.respond(state, "não")
+    state = workflow.respond(state, "não quero fazer mais nada por enquanto")
 
     assert state["end_reason"] is None
     assert state["triage_stage"] == "awaiting_end_confirmation"

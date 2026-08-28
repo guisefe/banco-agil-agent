@@ -229,7 +229,7 @@ def test_credit_agent_clarifies_unknown_or_ambiguous_action() -> None:
     agent, customers, _, _, _ = make_agent(
         intent_interpreter=IntentInterpreterStub(
             IntentInterpretation(
-                intent="credit_limit_increase",
+                intent="credit_limit_adjustment",
                 source="llm",
                 requested_limit=Decimal("4000.00"),
             )
@@ -258,14 +258,41 @@ def test_credit_agent_rejects_invalid_requested_limit() -> None:
         assert not requests.requests
 
 
-def test_credit_agent_requires_increase_over_current_limit() -> None:
-    agent, _, _, requests, _ = make_agent()
+def test_credit_agent_confirms_and_applies_limit_reduction() -> None:
+    agent, customers, _, requests, audit = make_agent()
     state = start_limit_request(agent)
 
     state = agent.respond(state, "2000")
 
-    assert "maior que o atual" in state["assistant_message"]
+    assert state["credit_stage"] == "confirming_limit_reduction"
+    assert "reduzi-lo" in state["assistant_message"]
     assert not requests.requests
+
+    state = agent.respond(state, "sim, pode")
+
+    assert state["active_agent"] == "triage"
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("2000.00")
+    assert any(event.event_type == "credit_limit_adjusted" for event in audit.events)
+    assert not requests.requests
+
+
+def test_credit_agent_can_cancel_or_skip_redundant_limit_adjustment() -> None:
+    agent, customers, _, requests, _ = make_agent()
+    state = agent.respond(start_limit_request(agent), "2000")
+
+    state = agent.respond(state, "não")
+
+    assert state["active_agent"] == "triage"
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == Decimal("2500.00")
+    assert not requests.requests
+
+    state = start_limit_request(agent)
+    state = agent.respond(state, "2500")
+
+    assert state["active_agent"] == "triage"
+    assert "já está ajustado" in state["assistant_message"]
 
 
 def test_credit_agent_approves_persists_and_audits_request() -> None:

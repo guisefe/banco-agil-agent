@@ -23,6 +23,7 @@ TriageStage = Literal[
 CreditStage = Literal[
     "awaiting_action",
     "awaiting_requested_limit",
+    "confirming_limit_reduction",
     "offering_interview",
 ]
 

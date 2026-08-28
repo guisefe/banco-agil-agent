@@ -52,7 +52,7 @@ A barra lateral informa o que aconteceu no último turno:
 
 | Cenário | CPF | Nascimento | Uso sugerido |
 | --- | --- | --- | --- |
-| Ana Martins | `00000000000` | `20/05/1990` | Consultar score/limite e pedir aumento. |
+| Ana Martins | `00000000000` | `20/05/1990` | Consultar score/limite e testar aumento ou redução. |
 | Mariana Souza | `22222222222` | `14/02/1995` | Testar cliente sem score e entrevista. |
 | João Pereira | `33333333333` | `08/09/1978` | Exercitar score baixo e possível rejeição. |
 | Fernanda Alves | `66666666666` | `30/06/1975` | Validar a fronteira superior da primeira faixa (`299`). |
@@ -65,12 +65,13 @@ Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 1. Entre como Ana e pergunte “qual é meu score?” e “qual é meu limite?”.
 2. Escreva “preciso de um fôlego de quatro mil no cartão”.
 3. Confirme `LLM ativa` na barra lateral e veja a decisão determinística de crédito.
-4. Inicie outra conversa como Mariana e solicite um aumento.
-5. Conclua a entrevista com respostas naturais, como “trabalho registrado” e “não tenho
+4. Peça um limite menor que o atual, confirme a redução e consulte o limite novamente.
+5. Inicie outra conversa como Mariana e solicite um aumento.
+6. Conclua a entrevista com respostas naturais, como “trabalho registrado” e “não tenho
    dívidas”.
-6. Confirme que o pedido original é reanalisado sem redigitar o valor.
-7. Peça “quanto está a moeda dos Estados Unidos?”.
-8. Digite “encerrar” durante uma nova operação.
+7. Confirme que o pedido original é reanalisado sem redigitar o valor.
+8. Peça “quanto está a moeda dos Estados Unidos?”.
+9. Responda “não” após o serviço e confirme o encerramento quando solicitado.
 
 Crédito altera os CSVs. Faça uma cópia de `data/` antes de repetir a demonstração.
 
@@ -79,7 +80,7 @@ Crédito altera os CSVs. Faça uma cópia de `data/` antes de repetir a demonstr
 | Agente | Responsabilidade |
 | --- | --- |
 | Triagem | Autentica por CPF + nascimento, limita a três tentativas e identifica o pedido. |
-| Crédito | Consulta score/limite e decide aumento pela política do CSV. |
+| Crédito | Consulta score/limite, decide aumentos pela política e confirma reduções solicitadas. |
 | Entrevista | Coleta cinco dados financeiros, recalcula o score e retorna para reanálise. |
 | Câmbio | Consulta USD, EUR, ARS, GBP ou JPY e retorna à Triagem. |
 
@@ -115,7 +116,7 @@ testar o fluxo sem depender da rede nem misturar decisão bancária com geraçã
 A Groq recebe apenas a mensagem do turno atual, após autenticação, para:
 
 - classificar intenção dentro de uma lista fechada;
-- extrair moeda e novo limite solicitado;
+- extrair moeda e o novo limite total desejado;
 - normalizar renda, emprego, despesas, dependentes e respostas sim/não.
 
 A API devolve JSON Schema estrito, validado novamente pelo domínio. Há duas tentativas para
@@ -128,6 +129,11 @@ histórico da conversa não entram no prompt.
 `score_limite.csv` define o limite máximo de cada faixa. Um cliente sem score não é tratado
 como zero e não recebe crédito automaticamente: a solicitação fica pendente, a entrevista é
 oferecida e o mesmo valor é reanalisado após a atualização.
+
+“Ajustar limite” é a operação apresentada ao cliente. Quando o valor desejado é maior, o fluxo
+continua sendo a solicitação de aumento exigida no desafio e passa pela política de score. Quando
+é menor, o agente pede confirmação explícita e persiste a redução sem criar uma falsa linha no
+CSV de aumentos. Se o valor for igual ao atual, apenas informa que nenhum ajuste é necessário.
 
 ```text
 (renda / (despesas + 1)) * peso_renda
@@ -179,6 +185,7 @@ busca geral; APIs cambiais têm contrato menor e mais simples de validar.
 | Cotação falhava quando um provedor estava indisponível | AwesomeAPI podia limitar chamadas e o BCB podia estar inacessível pela rede. | Cadeia AwesomeAPI → PTAX/BCB → Frankfurter, com timeout e linguagem correta para taxa de referência. |
 | “Nova conversa” não reiniciava uma sessão ativa no navegador | O teste cobria apenas conversas já encerradas e o rerun era controlado manualmente. | Callback de sessão do Streamlit e teste específico durante conversa ativa. |
 | `não` após um serviço era tratado como intenção desconhecida | O fluxo não distinguia recusa de outro serviço da confirmação de encerramento. | Estado `awaiting_end_confirmation`, confirmação em duas etapas e despedida mais humana, funcionando sem LLM. |
+| Um valor menor era rejeitado como “aumento inválido” | A operação estava modelada somente como aumento. | A ação passou a ser “ajustar limite”: aumentos seguem a política; reduções exigem confirmação e auditoria próprias. |
 | Aprovação envolve cliente e histórico em arquivos diferentes | CSV não oferece transação entre arquivos. | Substituição atômica, seção crítica e compensação quando o segundo registro falha. |
 
 ## Dados e auditoria
@@ -229,6 +236,10 @@ A CI repete os gates, exige ao menos 90% de cobertura de linhas/branches e tamb�
 health check do container. O contrato HTTP é simulado nos testes; Groq e as APIs cambiais devem
 ser confirmadas pelo roteiro manual porque dependem de credenciais, rede e disponibilidade
 externa.
+
+Para validar o limite de três tentativas de autenticação, informe um CPF da massa e uma data
+válida, mas incompatível, como `01/01/2000`; repita o par CPF + nascimento três vezes. Entradas
+com formato inválido são corrigidas antes da consulta e não contam como tentativa de identidade.
 
 ## Solução de problemas
 

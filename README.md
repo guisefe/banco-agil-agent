@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
-![LangGraph](https://img.shields.io/badge/orquestração-LangGraph-1C3C3C)
+[![LangGraph](https://img.shields.io/badge/orquestração-LangGraph-1C3C3C?logo=langgraph&logoColor=white)](https://github.com/langchain-ai/langgraph)
 ![Status](https://img.shields.io/badge/status-MVP%20completo-brightgreen)
 
 Assistente bancário desenvolvido para o desafio técnico da Tech For Humans. O cliente conversa
@@ -54,6 +54,9 @@ A barra lateral informa o que aconteceu no último turno:
 | --- | --- | --- | --- |
 | Ana Martins | `00000000000` | `20/05/1990` | Consultar score/limite e pedir aumento. |
 | Mariana Souza | `22222222222` | `14/02/1995` | Testar cliente sem score e entrevista. |
+| João Pereira | `33333333333` | `08/09/1978` | Exercitar score baixo e possível rejeição. |
+| Fernanda Alves | `66666666666` | `30/06/1975` | Validar a fronteira superior da primeira faixa (`299`). |
+| Rafael Lima | `77777777777` | `11/07/1992` | Validar a fronteira inicial da segunda faixa (`300`). |
 
 Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 
@@ -151,20 +154,32 @@ juntos.
 
 ## Decisões técnicas
 
-| Escolha | Motivo |
-| --- | --- |
-| LangGraph | O fluxo tem autenticação obrigatória, handoffs, encerramento global e ciclo Entrevista → Crédito; um grafo explicita essas transições. |
-| Groq | Baixa latência, modelo de produção com JSON Schema e endpoint compatível com OpenAI. O provedor pode ser trocado por configuração. |
-| Interpretação híbrida | Linguagem livre passa pela LLM; regras críticas permanecem reproduzíveis e há fallback local. |
-| AwesomeAPI + BCB + Frankfurter | A primeira atende tempo real; a PTAX oficial é a referência brasileira; a terceira reduz indisponibilidade sem outra chave. |
-| CSV | É parte do desafio e suficiente para um MVP local. Repositórios mantêm aberta a troca por banco transacional. |
-| Streamlit | É requisito da entrega e permite demonstrar o atendimento completo com pouca infraestrutura. |
+| Escolha | Por que foi adotada | Trade-off aceito |
+| --- | --- | --- |
+| LangGraph | Autenticação, handoffs, encerramento global e o ciclo Entrevista → Crédito formam uma máquina de estados explícita. | Mais estrutura que condicionais simples, em troca de transições visíveis e testáveis. |
+| Groq | Baixa latência, JSON Schema no modelo escolhido e endpoint compatível com OpenAI. | Dependência de rede e fornecedor, mitigada por configuração e fallback local. |
+| Interpretação híbrida | A LLM entende linguagem livre; Python e CSV preservam autenticação, score e decisão reproduzíveis. | O fallback entende menos variações, mas o fluxo crítico continua disponível. |
+| AwesomeAPI + BCB + Frankfurter | Combina tempo real opcional, referência brasileira oficial e uma fonte diária sem chave. | As fontes podem divergir; por isso a resposta identifica compra/venda ou taxa de referência. |
+| Repositórios sobre CSV | O PDF exige os arquivos e o domínio não deve depender de leitura direta. | CSV não é banco transacional; escrita atômica, lock e compensação são limites do MVP. |
+| Streamlit | É requisito da entrega e demonstra todo o atendimento com pouca infraestrutura. | Sessão local e execução em processo único, suficientes apenas para demonstração. |
 
 Alternativas do PDF também foram avaliadas: CrewAI privilegia colaboração autônoma, enquanto
 este fluxo exige ordem previsível; LlamaIndex seria útil para RAG, que não existe aqui;
 LangChain ampliaria a superfície sem substituir a máquina de estados; Google ADK é válido, mas
 introduziria outro modelo operacional para um fluxo pequeno. Tavily e SerpAPI são mecanismos de
 busca geral; APIs cambiais têm contrato menor e mais simples de validar.
+
+## Desafios enfrentados e como foram resolvidos
+
+| Problema observado | Causa | Solução adotada |
+| --- | --- | --- |
+| Streamlit e dependências pareciam ausentes | A `main` local estava desatualizada e havia outra cópia do repositório dentro da pasta. | Execução a partir da raiz correta, branch explícita, `uv sync --locked --dev` e instruções de diagnóstico. |
+| Chave Groq existia, mas a interface mostrava fallback local | Variável exportada valia apenas no terminal e o `.env` não era carregado. | Carregamento automático do `.env`, sem sobrescrever variáveis reais do processo, e status visível na interface. |
+| LLM retornava JSON menos previsível | O cliente usava JSON Object Mode. | JSON Schema estrito na Groq, validação de domínio, duas tentativas transitórias e fallback determinístico. |
+| Cotação falhava quando um provedor estava indisponível | AwesomeAPI podia limitar chamadas e o BCB podia estar inacessível pela rede. | Cadeia AwesomeAPI → PTAX/BCB → Frankfurter, com timeout e linguagem correta para taxa de referência. |
+| “Nova conversa” não reiniciava uma sessão ativa no navegador | O teste cobria apenas conversas já encerradas e o rerun era controlado manualmente. | Callback de sessão do Streamlit e teste específico durante conversa ativa. |
+| `não` após um serviço era tratado como intenção desconhecida | O fluxo não distinguia recusa de outro serviço da confirmação de encerramento. | Estado `awaiting_end_confirmation`, confirmação em duas etapas e despedida mais humana, funcionando sem LLM. |
+| Aprovação envolve cliente e histórico em arquivos diferentes | CSV não oferece transação entre arquivos. | Substituição atômica, seção crítica e compensação quando o segundo registro falha. |
 
 ## Dados e auditoria
 
@@ -173,6 +188,12 @@ busca geral; APIs cambiais têm contrato menor e mais simples de validar.
 | `data/clientes.csv` | Identidade fictícia, limite atual e score opcional. |
 | `data/score_limite.csv` | Faixas de score e limite máximo. |
 | `data/solicitacoes_aumento_limite.csv` | Histórico de solicitações e resultado. |
+
+`clientes.csv` inclui perfis sintéticos sem score, com score mínimo, máximo e valores de
+fronteira. `score_limite.csv` não recebe linhas extras porque suas cinco faixas já particionam
+todo o intervalo de 0 a 1000 sem lacunas ou sobreposição. O CSV de solicitações começa vazio,
+somente com cabeçalho, pois é uma saída produzida pelo sistema e não uma massa de entrada.
+Os nomes dos três arquivos permanecem os definidos no desafio.
 
 A trilha JSONL registra evento, resultado, motivo e versão da política. Não copia CPF,
 nascimento, score, renda, valores ou conversa completa. HMAC pseudonimiza a referência do

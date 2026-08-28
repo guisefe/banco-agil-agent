@@ -15,6 +15,11 @@ _END_REQUESTS = frozenset(
     }
 )
 
+USER_REQUESTED_END_MESSAGE = (
+    "Tudo certo! Seu atendimento foi finalizado. Obrigado por conversar com o Banco Ágil. "
+    "Tenha um ótimo dia!"
+)
+
 
 def normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)

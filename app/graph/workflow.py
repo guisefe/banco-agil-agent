@@ -11,7 +11,7 @@ from app.audit.events import AuditEvent
 from app.audit.privacy import pseudonymize_subject
 from app.audit.writer import AuditWriteError, AuditWriter
 from app.models.conversation import ConversationState, initial_state
-from app.tools.conversation import end_conversation, is_end_request
+from app.tools.conversation import USER_REQUESTED_END_MESSAGE, end_conversation, is_end_request
 
 GraphRoute = Literal["triage", "credit", "interview", "exchange"]
 InterviewRoute = Literal["credit_reanalysis", "end"]
@@ -171,7 +171,7 @@ class ConversationWorkflow:
         ended_state = end_conversation(
             next_state,
             reason="user_requested",
-            assistant_message="Atendimento encerrado. Obrigado por falar com o Banco Ágil!",
+            assistant_message=USER_REQUESTED_END_MESSAGE,
         )
         try:
             self._audit_writer.append(

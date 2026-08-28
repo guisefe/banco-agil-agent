@@ -33,6 +33,7 @@ def render_app() -> None:
         st.write("Canal: **Atendimento**")
         interpretation_mode = _interpretation_mode(application, state)
         st.write(f"Interpretação: **{interpretation_mode}**")
+        st.write(f"Cotação: **{application.exchange_mode}**")
         st.write(f"Tentativas de autenticação: **{state['authentication_attempts']}/3**")
         if application.uses_ephemeral_audit_key:
             st.warning(

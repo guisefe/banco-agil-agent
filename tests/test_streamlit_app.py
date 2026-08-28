@@ -7,7 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 from app.graph.workflow import ConversationWorkflow
 from app.models.exchange import ExchangeQuote
-from app.repositories.exchange import AwesomeApiExchangeRateRepository
+from app.repositories.exchange import BcbPtaxExchangeRateRepository
 from app.services.understanding import (
     InterpretationError,
     OpenAICompatibleConversationInterpreter,
@@ -101,7 +101,7 @@ def test_streamlit_app_completes_exchange_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def get_quote(
-        repository: AwesomeApiExchangeRateRepository,
+        repository: BcbPtaxExchangeRateRepository,
         *,
         currency: str,
     ) -> ExchangeQuote:
@@ -112,7 +112,7 @@ def test_streamlit_app_completes_exchange_quote(
             quoted_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
         )
 
-    monkeypatch.setattr(AwesomeApiExchangeRateRepository, "get_brl_quote", get_quote)
+    monkeypatch.setattr(BcbPtaxExchangeRateRepository, "get_brl_quote", get_quote)
     app = make_app_test().run()
     app.chat_input[0].set_value("00000000000").run()
     app.chat_input[0].set_value("20/05/1990").run()

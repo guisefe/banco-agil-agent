@@ -93,7 +93,10 @@ def test_llm_interpreter_sends_restricted_prompt_and_parses_json() -> None:
     assert request_body["max_completion_tokens"] == 256
     assert request_body["reasoning_effort"] == "low"
     assert request_body["include_reasoning"] is False
-    assert request_body["response_format"] == {"type": "json_object"}
+    response_format = request_body["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["name"] == "banking_intent"
     assert "Nunca autentique" in request_body["messages"][0]["content"]
     sent_message = request_body["messages"][1]["content"]
     assert "000.000.000-00" not in sent_message

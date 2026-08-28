@@ -9,7 +9,12 @@ from app.config import Settings, load_settings
 from app.graph.workflow import ConversationWorkflow
 from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRepository
 from app.repositories.customers import CsvCustomerRepository
-from app.repositories.exchange import AwesomeApiExchangeRateRepository
+from app.repositories.exchange import (
+    AwesomeApiExchangeRateRepository,
+    BcbPtaxExchangeRateRepository,
+    ExchangeRateRepository,
+    FallbackExchangeRateRepository,
+)
 from app.services.understanding import (
     ConversationInterpreter,
     DeterministicConversationInterpreter,
@@ -23,12 +28,23 @@ class Application:
     workflow: ConversationWorkflow
     uses_ephemeral_audit_key: bool
     uses_llm: bool
+    exchange_mode: str
 
 
 def build_application(*, settings: Settings | None = None) -> Application:
     resolved_settings = settings or load_settings()
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
+    exchange_repository: ExchangeRateRepository = BcbPtaxExchangeRateRepository()
+    exchange_mode = "PTAX do Banco Central"
+    if resolved_settings.exchange_api_key is not None:
+        exchange_repository = FallbackExchangeRateRepository(
+            primary=AwesomeApiExchangeRateRepository(
+                api_key=resolved_settings.exchange_api_key,
+            ),
+            fallback=exchange_repository,
+        )
+        exchange_mode = "AwesomeAPI com fallback PTAX"
     deterministic_interpreter = DeterministicConversationInterpreter()
     conversation_interpreter: ConversationInterpreter
     if resolved_settings.llm_api_key is None:
@@ -64,9 +80,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         field_interpreter=conversation_interpreter,
     )
     exchange_agent = ExchangeAgent(
-        exchange_repository=AwesomeApiExchangeRateRepository(
-            api_key=resolved_settings.exchange_api_key,
-        ),
+        exchange_repository=exchange_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
         field_interpreter=conversation_interpreter,
@@ -82,4 +96,5 @@ def build_application(*, settings: Settings | None = None) -> Application:
         ),
         uses_ephemeral_audit_key=resolved_settings.uses_ephemeral_audit_key,
         uses_llm=resolved_settings.llm_api_key is not None,
+        exchange_mode=exchange_mode,
     )

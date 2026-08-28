@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -20,6 +21,9 @@ from app.tools.conversation import normalize_text
 INTENT_POLICY_VERSION = "hybrid-intent-v1"
 DEFAULT_LLM_TIMEOUT_SECONDS = 8.0
 MAX_LLM_MESSAGE_CHARACTERS = 1000
+MAX_LLM_ATTEMPTS = 2
+_RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+_LOGGER = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """Você classifica a intenção de mensagens de um banco digital fictício.
 Responda somente um objeto JSON com as chaves intent, currency e requested_limit.
@@ -219,6 +223,7 @@ class OpenAICompatibleConversationInterpreter:
             payload = self._request_json(
                 system_prompt=_SYSTEM_PROMPT,
                 user_message=_safe_message_for_llm(message),
+                response_format=_intent_response_format(strict=self._uses_groq),
             )
             return _parse_chat_completion(payload)
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
@@ -237,6 +242,10 @@ class OpenAICompatibleConversationInterpreter:
                     f"Formato esperado: {_FIELD_RULES[expected]}\n"
                     f"Mensagem: {_safe_message_for_llm(message)}"
                 ),
+                response_format=_field_response_format(
+                    expected=expected,
+                    strict=self._uses_groq,
+                ),
             )
             return FieldInterpretation(
                 value=_parse_field_completion(payload, expected=expected),
@@ -245,12 +254,18 @@ class OpenAICompatibleConversationInterpreter:
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
             raise InterpretationError("LLM field interpretation failed") from error
 
-    def _request_json(self, *, system_prompt: str, user_message: str) -> object:
+    def _request_json(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        response_format: Mapping[str, object],
+    ) -> object:
         request_payload: dict[str, object] = {
             "model": self._model,
             "temperature": 0,
             "max_completion_tokens": 256,
-            "response_format": {"type": "json_object"},
+            "response_format": response_format,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -265,16 +280,28 @@ class OpenAICompatibleConversationInterpreter:
             timeout=self._timeout_seconds,
             transport=self._transport,
         ) as client:
-            response = client.post(
-                self._endpoint,
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=request_payload,
-            )
-            response.raise_for_status()
-            return response.json()
+            for attempt in range(MAX_LLM_ATTEMPTS):
+                try:
+                    response = client.post(
+                        self._endpoint,
+                        headers={
+                            "Authorization": f"Bearer {self._api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=request_payload,
+                    )
+                except httpx.TransportError:
+                    if attempt + 1 == MAX_LLM_ATTEMPTS:
+                        raise
+                    continue
+                if (
+                    response.status_code in _RETRYABLE_STATUS_CODES
+                    and attempt + 1 < MAX_LLM_ATTEMPTS
+                ):
+                    continue
+                response.raise_for_status()
+                return response.json()
+        raise RuntimeError("LLM request exhausted without a response")
 
 
 class ResilientConversationInterpreter:
@@ -290,7 +317,8 @@ class ResilientConversationInterpreter:
     def interpret(self, message: str) -> IntentInterpretation:
         try:
             return self._primary.interpret(message)
-        except InterpretationError:
+        except InterpretationError as error:
+            _log_fallback(error)
             return replace(
                 self._fallback.interpret(message),
                 source="deterministic_fallback",
@@ -306,7 +334,8 @@ class ResilientConversationInterpreter:
         fallback = cast(FieldInterpreter, self._fallback)
         try:
             return primary.interpret_field(message, expected=expected)
-        except InterpretationError:
+        except InterpretationError as error:
+            _log_fallback(error)
             return replace(
                 fallback.interpret_field(message, expected=expected),
                 source="deterministic_fallback",
@@ -365,6 +394,78 @@ def _parse_json_content(payload: object) -> dict[str, object]:
     if not isinstance(parsed, dict):
         raise InterpretationError("LLM content must be a JSON object")
     return cast(dict[str, object], parsed)
+
+
+def _intent_response_format(*, strict: bool) -> Mapping[str, object]:
+    if not strict:
+        return {"type": "json_object"}
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "banking_intent",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "intent": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
+                    "currency": {
+                        "type": ["string", "null"],
+                        "enum": [*sorted(SUPPORTED_CURRENCIES), None],
+                    },
+                    "requested_limit": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                    },
+                },
+                "required": ["intent", "currency", "requested_limit"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+def _field_response_format(
+    *,
+    expected: ExpectedField,
+    strict: bool,
+) -> Mapping[str, object]:
+    if not strict:
+        return {"type": "json_object"}
+    value_schema: dict[str, object] = {"type": ["string", "null"]}
+    if expected == "money":
+        value_schema["pattern"] = r"^\d+(?:\.\d{1,2})?$"
+    elif expected == "employment":
+        value_schema["enum"] = ["formal", "autonomo", "desempregado", None]
+    elif expected == "dependents":
+        value_schema["pattern"] = r"^\d+$"
+    elif expected == "yes_no":
+        value_schema["enum"] = ["sim", "nao", None]
+    else:
+        value_schema["enum"] = [*sorted(SUPPORTED_CURRENCIES), None]
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": f"banking_{expected}",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {"value": value_schema},
+                "required": ["value"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+def _log_fallback(error: InterpretationError) -> None:
+    cause = error.__cause__
+    cause_name = type(cause).__name__ if cause is not None else type(error).__name__
+    status_code = cause.response.status_code if isinstance(cause, httpx.HTTPStatusError) else None
+    _LOGGER.warning(
+        "LLM interpretation failed; deterministic fallback activated (cause=%s, status=%s)",
+        cause_name,
+        status_code or "unavailable",
+    )
 
 
 def _parse_field_completion(payload: object, *, expected: ExpectedField) -> str | None:

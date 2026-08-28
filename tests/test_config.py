@@ -50,6 +50,18 @@ def test_settings_read_optional_exchange_api_key(tmp_path: Path) -> None:
     assert settings.exchange_api_key == "demo-key"
 
 
+def test_settings_load_local_dotenv_when_environment_is_not_injected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(GROQ_API_KEY_ENVIRONMENT_VARIABLE, raising=False)
+    (tmp_path / ".env").write_text("GROQ_API_KEY=dotenv-key\n", encoding="utf-8")
+
+    settings = load_settings(project_root=tmp_path)
+
+    assert settings.llm_api_key == "dotenv-key"
+
+
 def test_settings_enable_llm_from_supported_key_names(tmp_path: Path) -> None:
     for key_name in [LLM_API_KEY_ENVIRONMENT_VARIABLE, GROQ_API_KEY_ENVIRONMENT_VARIABLE]:
         settings = load_settings(

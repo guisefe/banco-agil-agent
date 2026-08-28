@@ -216,7 +216,7 @@ class StubIntentInterpreter:
 
 def test_triage_uses_llm_interpretation_only_after_authentication() -> None:
     interpreter = StubIntentInterpreter(
-        IntentInterpretation(intent="credit_limit_increase", source="llm")
+        IntentInterpretation(intent="credit_limit_adjustment", source="llm")
     )
     agent, _, audit = make_agent(
         customer=make_customer(),
@@ -228,7 +228,7 @@ def test_triage_uses_llm_interpretation_only_after_authentication() -> None:
 
     assert interpreter.messages == ["preciso de um fôlego maior no cartão"]
     assert state["active_agent"] == "credit"
-    assert state["interpreted_intent"] == "credit_limit_increase"
+    assert state["interpreted_intent"] == "credit_limit_adjustment"
     assert [event.event_type for event in audit.events[-2:]] == [
         "intent_interpreted",
         "agent_handoff",

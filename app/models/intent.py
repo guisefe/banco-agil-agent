@@ -6,7 +6,7 @@ IntentName = Literal[
     "credit_menu",
     "credit_limit_query",
     "credit_score_query",
-    "credit_limit_increase",
+    "credit_limit_adjustment",
     "credit_interview",
     "exchange_quote",
     "unknown",
@@ -19,7 +19,7 @@ ALLOWED_INTENTS = frozenset(
         "credit_menu",
         "credit_limit_query",
         "credit_score_query",
-        "credit_limit_increase",
+        "credit_limit_adjustment",
         "credit_interview",
         "exchange_quote",
         "unknown",
@@ -46,6 +46,6 @@ class IntentInterpretation:
             if (
                 not self.requested_limit.is_finite()
                 or self.requested_limit <= 0
-                or self.intent != "credit_limit_increase"
+                or self.intent != "credit_limit_adjustment"
             ):
-                raise ValueError("requested_limit is only valid for a positive credit increase")
+                raise ValueError("requested_limit is only valid for a positive limit adjustment")

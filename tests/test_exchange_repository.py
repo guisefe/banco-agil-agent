@@ -7,10 +7,12 @@ import pytest
 from app.repositories.exchange import (
     AWESOME_API_BASE_URL,
     BCB_PTAX_BASE_URL,
+    FRANKFURTER_RATE_BASE_URL,
     AwesomeApiExchangeRateRepository,
     BcbPtaxExchangeRateRepository,
     ExchangeRateUnavailableError,
     FallbackExchangeRateRepository,
+    FrankfurterExchangeRateRepository,
 )
 
 
@@ -106,7 +108,11 @@ def test_repository_wraps_repeated_transport_failure() -> None:
 
 
 def test_repository_rejects_invalid_timeout() -> None:
-    for repository_type in [AwesomeApiExchangeRateRepository, BcbPtaxExchangeRateRepository]:
+    for repository_type in [
+        AwesomeApiExchangeRateRepository,
+        BcbPtaxExchangeRateRepository,
+        FrankfurterExchangeRateRepository,
+    ]:
         with pytest.raises(ValueError, match="positive"):
             repository_type(timeout_seconds=0)
 
@@ -174,3 +180,22 @@ def test_exchange_repository_falls_back_when_primary_is_unavailable() -> None:
     ).get_brl_quote(currency="USD")
 
     assert quote.buy_rate == Decimal("5")
+
+
+def test_frankfurter_repository_returns_daily_reference_rate() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == f"{FRANKFURTER_RATE_BASE_URL}/USD/BRL"
+        return httpx.Response(
+            200,
+            json={"date": "2026-08-28", "base": "USD", "quote": "BRL", "rate": 5.42},
+        )
+
+    repository = FrankfurterExchangeRateRepository(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    quote = repository.get_brl_quote(currency="USD")
+
+    assert quote.buy_rate == Decimal("5.42")
+    assert quote.sell_rate == Decimal("5.42")
+    assert quote.quoted_at == datetime(2026, 8, 28, tzinfo=UTC)

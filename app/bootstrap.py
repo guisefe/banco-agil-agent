@@ -14,6 +14,7 @@ from app.repositories.exchange import (
     BcbPtaxExchangeRateRepository,
     ExchangeRateRepository,
     FallbackExchangeRateRepository,
+    FrankfurterExchangeRateRepository,
 )
 from app.services.understanding import (
     ConversationInterpreter,
@@ -35,8 +36,11 @@ def build_application(*, settings: Settings | None = None) -> Application:
     resolved_settings = settings or load_settings()
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
-    exchange_repository: ExchangeRateRepository = BcbPtaxExchangeRateRepository()
-    exchange_mode = "PTAX do Banco Central"
+    exchange_repository: ExchangeRateRepository = FallbackExchangeRateRepository(
+        primary=BcbPtaxExchangeRateRepository(),
+        fallback=FrankfurterExchangeRateRepository(),
+    )
+    exchange_mode = "PTAX com fallback de referência"
     if resolved_settings.exchange_api_key is not None:
         exchange_repository = FallbackExchangeRateRepository(
             primary=AwesomeApiExchangeRateRepository(
@@ -44,7 +48,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
             ),
             fallback=exchange_repository,
         )
-        exchange_mode = "AwesomeAPI com fallback PTAX"
+        exchange_mode = "AwesomeAPI com fallback PTAX/referência"
     deterministic_interpreter = DeterministicConversationInterpreter()
     conversation_interpreter: ConversationInterpreter
     if resolved_settings.llm_api_key is None:

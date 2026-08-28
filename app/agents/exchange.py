@@ -160,6 +160,12 @@ def _identify_currency(message: str) -> str | None:
 
 def _format_quote(quote: ExchangeQuote) -> str:
     timestamp = quote.quoted_at.astimezone(UTC).strftime("%d/%m/%Y às %H:%M UTC")
+    if quote.buy_rate == quote.sell_rate:
+        return (
+            f"Taxa de referência de {quote.currency} em reais: "
+            f"R$ {_format_brl_rate(quote.buy_rate)}, atualizada em {timestamp}. "
+            "Posso ajudar com outro assunto?"
+        )
     return (
         f"Cotação de {quote.currency} em reais: compra R$ {_format_brl_rate(quote.buy_rate)} e "
         f"venda R$ {_format_brl_rate(quote.sell_rate)}, atualizada em {timestamp}. "

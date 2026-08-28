@@ -143,6 +143,9 @@ juntos.
 - Com `EXCHANGE_API_KEY`, a AwesomeAPI fornece a cotação em tempo real.
 - Se ela estiver ausente ou falhar, o sistema consulta a última PTAX disponível na API oficial
   do Banco Central do Brasil.
+- Se o BCB estiver temporariamente inacessível, uma taxa diária de referência da Frankfurter
+  mantém o fluxo disponível sem exigir outra chave. Nesse caso, a interface não chama o valor
+  de compra/venda, pois se trata de uma taxa de referência.
 - Timeout, resposta inválida e indisponibilidade produzem mensagem controlada, sem travar a
   sessão.
 
@@ -153,7 +156,7 @@ juntos.
 | LangGraph | O fluxo tem autenticação obrigatória, handoffs, encerramento global e ciclo Entrevista → Crédito; um grafo explicita essas transições. |
 | Groq | Baixa latência, modelo de produção com JSON Schema e endpoint compatível com OpenAI. O provedor pode ser trocado por configuração. |
 | Interpretação híbrida | Linguagem livre passa pela LLM; regras críticas permanecem reproduzíveis e há fallback local. |
-| AwesomeAPI + BCB | A primeira atende tempo real; a PTAX oficial evita que o recurso dependa de uma única API ou chave. |
+| AwesomeAPI + BCB + Frankfurter | A primeira atende tempo real; a PTAX oficial é a referência brasileira; a terceira reduz indisponibilidade sem outra chave. |
 | CSV | É parte do desafio e suficiente para um MVP local. Repositórios mantêm aberta a troca por banco transacional. |
 | Streamlit | É requisito da entrega e permite demonstrar o atendimento completo com pouca infraestrutura. |
 
@@ -221,8 +224,9 @@ cliente nem chave.
 
 **A cotação não retorna**
 
-Verifique acesso HTTPS a `olinda.bcb.gov.br`. Para tempo real, adicione uma chave válida da
-AwesomeAPI em `EXCHANGE_API_KEY`. A barra lateral mostra qual estratégia foi configurada.
+Verifique acesso HTTPS a `olinda.bcb.gov.br` e `api.frankfurter.dev`. Para tempo real, adicione
+uma chave válida da AwesomeAPI em `EXCHANGE_API_KEY`. O terminal informa qual provedor falhou
+sem registrar a mensagem ou dados do cliente, e a barra lateral mostra a estratégia configurada.
 
 ## Limites do MVP
 

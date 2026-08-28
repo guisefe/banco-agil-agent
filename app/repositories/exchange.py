@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -8,6 +9,7 @@ import httpx
 from app.models.exchange import ExchangeQuote
 
 AWESOME_API_BASE_URL = "https://economia.awesomeapi.com.br/json/last"
+FRANKFURTER_RATE_BASE_URL = "https://api.frankfurter.dev/v2/rate"
 BCB_PTAX_BASE_URL = (
     "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/"
     "CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,"
@@ -16,6 +18,7 @@ BCB_PTAX_BASE_URL = (
 EXCHANGE_TIMEOUT_SECONDS = 5.0
 MAX_TRANSPORT_ATTEMPTS = 2
 _BRASILIA_TIMEZONE = timezone(timedelta(hours=-3))
+_LOGGER = logging.getLogger(__name__)
 
 
 class ExchangeRateRepository(Protocol):
@@ -119,6 +122,42 @@ class BcbPtaxExchangeRateRepository:
         raise ExchangeRateUnavailableError("BCB connection failed") from last_error
 
 
+class FrankfurterExchangeRateRepository:
+    def __init__(
+        self,
+        *,
+        client: httpx.Client | None = None,
+        timeout_seconds: float = EXCHANGE_TIMEOUT_SECONDS,
+    ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        self._client = client or httpx.Client(timeout=timeout_seconds)
+        self._timeout_seconds = timeout_seconds
+
+    def get_brl_quote(self, *, currency: str) -> ExchangeQuote:
+        if currency not in {"USD", "EUR", "ARS", "GBP", "JPY"}:
+            raise ValueError("currency is not supported")
+        response = self._request_with_retry(currency=currency)
+        if response.status_code != httpx.codes.OK:
+            raise ExchangeRateUnavailableError("Frankfurter returned an unsuccessful response")
+        try:
+            return _extract_frankfurter_quote(response.json(), currency=currency)
+        except (TypeError, ValueError, KeyError, InvalidOperation) as error:
+            raise ExchangeRateUnavailableError("Frankfurter returned an invalid quote") from error
+
+    def _request_with_retry(self, *, currency: str) -> httpx.Response:
+        last_error: httpx.TransportError | None = None
+        for _ in range(MAX_TRANSPORT_ATTEMPTS):
+            try:
+                return self._client.get(
+                    f"{FRANKFURTER_RATE_BASE_URL}/{currency}/BRL",
+                    timeout=self._timeout_seconds,
+                )
+            except httpx.TransportError as error:
+                last_error = error
+        raise ExchangeRateUnavailableError("Frankfurter connection failed") from last_error
+
+
 class FallbackExchangeRateRepository:
     def __init__(
         self,
@@ -132,7 +171,12 @@ class FallbackExchangeRateRepository:
     def get_brl_quote(self, *, currency: str) -> ExchangeQuote:
         try:
             return self._primary.get_brl_quote(currency=currency)
-        except ExchangeRateUnavailableError:
+        except ExchangeRateUnavailableError as error:
+            _LOGGER.warning(
+                "exchange provider unavailable; trying fallback provider=%s cause=%s",
+                type(self._primary).__name__,
+                type(error.__cause__ or error).__name__,
+            )
             return self._fallback.get_brl_quote(currency=currency)
 
 
@@ -171,4 +215,19 @@ def _extract_bcb_quote(payload: object, *, currency: str) -> ExchangeQuote:
         buy_rate=Decimal(str(raw_quote["cotacaoCompra"])),
         sell_rate=Decimal(str(raw_quote["cotacaoVenda"])),
         quoted_at=quoted_at.astimezone(UTC),
+    )
+
+
+def _extract_frankfurter_quote(payload: object, *, currency: str) -> ExchangeQuote:
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
+    if payload["base"] != currency or payload["quote"] != "BRL":
+        raise ValueError("payload contains an unexpected currency pair")
+    reference_rate = Decimal(str(payload["rate"]))
+    quoted_at = datetime.fromisoformat(str(payload["date"])).replace(tzinfo=UTC)
+    return ExchangeQuote(
+        currency=currency,
+        buy_rate=reference_rate,
+        sell_rate=reference_rate,
+        quoted_at=quoted_at,
     )

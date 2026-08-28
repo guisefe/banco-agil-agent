@@ -86,7 +86,7 @@ class ConversationWorkflow:
         ] = builder.compile()
 
     def start(self) -> ConversationState:
-        return self._invoke(initial_state())
+        return initial_state()
 
     def respond(
         self,
@@ -95,7 +95,7 @@ class ConversationWorkflow:
     ) -> ConversationState:
         if state["end_reason"] is not None:
             raise ValueError("conversation has already ended")
-        if is_end_request(user_message):
+        if state["triage_stage"] != "greeting" and is_end_request(user_message):
             return self._end_by_user_request(state, user_message)
         graph_input = state.copy()
         graph_input["user_message"] = user_message
@@ -103,7 +103,7 @@ class ConversationWorkflow:
 
     def _run_triage(self, state: ConversationState) -> ConversationState:
         if state["triage_stage"] == "greeting":
-            return self._triage_agent.start(state)
+            return self._triage_agent.activate(state, state["user_message"])
         return self._triage_agent.respond(state, state["user_message"])
 
     def _run_credit(self, state: ConversationState) -> ConversationState:

@@ -166,9 +166,15 @@ def test_workflow_runs_triage_turns_through_langgraph() -> None:
 def test_workflow_runs_exchange_quote_and_returns_to_triage() -> None:
     workflow = make_workflow()
     state = workflow.start()
+    state = workflow.respond(state, "quero saber a cotação do dólar")
+
+    assert state["authenticated"] is False
+    assert state["active_agent"] == "triage"
+    assert state["interpreted_intent"] == "exchange_quote"
+    assert "CPF" in state["assistant_message"]
+
     state = workflow.respond(state, "00000000000")
     state = workflow.respond(state, "20/05/1990")
-    state = workflow.respond(state, "cotação do dólar")
 
     assert state["active_agent"] == "triage"
     assert "Cotação de USD" in state["assistant_message"]

@@ -75,28 +75,28 @@ def make_agent(
 
 
 def started_state(agent: TriageAgent) -> ConversationState:
-    return agent.start(initial_state())
+    return agent.activate(initial_state(), "Olá")
 
 
 def authenticate(agent: TriageAgent) -> ConversationState:
-    state = started_state(agent)
-    state = agent.respond(state, "000.000.000-00")
+    state = agent.activate(initial_state(), "000.000.000-00")
     return agent.respond(state, "20/05/1990")
 
 
-def test_triage_starts_with_greeting_and_audit_event() -> None:
+def test_triage_activates_after_user_greeting_and_records_audit_event() -> None:
     agent, _, audit_writer = make_agent()
 
     state = started_state(agent)
 
-    assert state["triage_stage"] == "awaiting_cpf"
-    assert "CPF" in state["assistant_message"]
+    assert state["triage_stage"] == "awaiting_service"
+    assert "Como posso ajudar" in state["assistant_message"]
     assert audit_writer.events[0].event_type == "conversation_started"
 
 
 def test_triage_rejects_invalid_cpf_without_consuming_attempt() -> None:
     agent, repository, _ = make_agent()
     state = started_state(agent)
+    state = agent.respond(state, "Quero consultar meu limite")
 
     state = agent.respond(state, "123")
 

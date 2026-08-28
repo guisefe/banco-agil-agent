@@ -56,7 +56,7 @@ def render_app() -> None:
         st.success("Conversa finalizada. Inicie uma nova conversa para continuar.")
 
     user_message = st.chat_input(
-        "Digite sua mensagem",
+        "Envie uma mensagem para iniciar o atendimento",
         disabled=not can_receive_message,
     )
     if user_message:
@@ -102,7 +102,7 @@ def _get_or_start_conversation(
 def _reset_conversation(application: Application) -> None:
     state = application.workflow.start()
     st.session_state[_STATE_KEY] = state
-    st.session_state[_MESSAGES_KEY] = [{"role": "assistant", "content": state["assistant_message"]}]
+    st.session_state[_MESSAGES_KEY] = []
 
 
 def _interpretation_mode(application: Application, state: ConversationState) -> str:

@@ -7,8 +7,11 @@ from streamlit.testing.v1 import AppTest
 
 from app.graph.workflow import ConversationWorkflow
 from app.models.exchange import ExchangeQuote
-from app.repositories.exchange import AwesomeApiExchangeRateRepository
-from app.services.intent import IntentInterpretationError, OpenAICompatibleIntentInterpreter
+from app.repositories.exchange import BcbPtaxExchangeRateRepository
+from app.services.understanding import (
+    InterpretationError,
+    OpenAICompatibleConversationInterpreter,
+)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -39,13 +42,17 @@ def test_streamlit_app_shows_when_llm_mode_is_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_interpretation(
-        interpreter: OpenAICompatibleIntentInterpreter,
+        interpreter: OpenAICompatibleConversationInterpreter,
         message: str,
     ) -> None:
-        raise IntentInterpretationError("simulated provider failure")
+        raise InterpretationError("simulated provider failure")
 
     monkeypatch.setenv("GROQ_API_KEY", "test-only-key")
-    monkeypatch.setattr(OpenAICompatibleIntentInterpreter, "interpret", fail_interpretation)
+    monkeypatch.setattr(
+        OpenAICompatibleConversationInterpreter,
+        "interpret",
+        fail_interpretation,
+    )
 
     app = make_app_test().run()
 
@@ -90,11 +97,25 @@ def test_streamlit_app_can_start_new_conversation_after_end() -> None:
     assert len(app.chat_message) == 1
 
 
+def test_streamlit_app_can_reset_an_active_conversation() -> None:
+    app = make_app_test().run()
+    app.chat_input[0].set_value("00000000000").run()
+
+    assert len(app.chat_message) == 3
+
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert app.chat_input[0].disabled is False
+    assert len(app.chat_message) == 1
+    assert "CPF" in app.chat_message[0].markdown[0].value
+
+
 def test_streamlit_app_completes_exchange_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def get_quote(
-        repository: AwesomeApiExchangeRateRepository,
+        repository: BcbPtaxExchangeRateRepository,
         *,
         currency: str,
     ) -> ExchangeQuote:
@@ -105,7 +126,7 @@ def test_streamlit_app_completes_exchange_quote(
             quoted_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
         )
 
-    monkeypatch.setattr(AwesomeApiExchangeRateRepository, "get_brl_quote", get_quote)
+    monkeypatch.setattr(BcbPtaxExchangeRateRepository, "get_brl_quote", get_quote)
     app = make_app_test().run()
     app.chat_input[0].set_value("00000000000").run()
     app.chat_input[0].set_value("20/05/1990").run()

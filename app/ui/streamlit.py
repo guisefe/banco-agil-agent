@@ -33,15 +33,19 @@ def render_app() -> None:
         st.write("Canal: **Atendimento**")
         interpretation_mode = _interpretation_mode(application, state)
         st.write(f"Interpretação: **{interpretation_mode}**")
+        st.write(f"Cotação: **{application.exchange_mode}**")
         st.write(f"Tentativas de autenticação: **{state['authentication_attempts']}/3**")
         if application.uses_ephemeral_audit_key:
             st.warning(
                 "Demonstração usando chave de auditoria efêmera. "
                 "Configure AUDIT_PSEUDONYMIZATION_KEY para uma referência estável."
             )
-        if st.button("Nova conversa", use_container_width=True):
-            _reset_conversation(application)
-            st.rerun()
+        st.button(
+            "Nova conversa",
+            use_container_width=True,
+            on_click=_reset_conversation,
+            args=(application,),
+        )
 
     for message in messages:
         with st.chat_message(message["role"]):

@@ -15,7 +15,7 @@ from app.models.customer import Customer
 from app.models.intent import IntentInterpretation
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
-from app.services.intent import IntentInterpreter
+from app.services.understanding import IntentInterpreter
 
 PSEUDONYMIZATION_KEY = b"test-only-pseudonymization-key-32-bytes"
 

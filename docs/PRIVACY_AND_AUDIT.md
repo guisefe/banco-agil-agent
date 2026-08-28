@@ -13,7 +13,7 @@ The audit trail exists to reconstruct security-sensitive and business-relevant a
 - authentication attempts, without credentials or raw identifiers;
 - handoffs between agents;
 - credit decisions and the version of the deterministic policy used;
-- changes to the customer risk profile.
+- changes to the customer risk profile;
 - exchange quote requests, without API payloads or raw customer identifiers.
 
 Audit data must not be reused for advertising, model training, employee surveillance, or

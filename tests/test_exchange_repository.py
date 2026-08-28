@@ -6,8 +6,13 @@ import pytest
 
 from app.repositories.exchange import (
     AWESOME_API_BASE_URL,
+    BCB_PTAX_BASE_URL,
+    FRANKFURTER_RATE_BASE_URL,
     AwesomeApiExchangeRateRepository,
+    BcbPtaxExchangeRateRepository,
     ExchangeRateUnavailableError,
+    FallbackExchangeRateRepository,
+    FrankfurterExchangeRateRepository,
 )
 
 
@@ -103,5 +108,94 @@ def test_repository_wraps_repeated_transport_failure() -> None:
 
 
 def test_repository_rejects_invalid_timeout() -> None:
-    with pytest.raises(ValueError, match="positive"):
-        AwesomeApiExchangeRateRepository(timeout_seconds=0)
+    for repository_type in [
+        AwesomeApiExchangeRateRepository,
+        BcbPtaxExchangeRateRepository,
+        FrankfurterExchangeRateRepository,
+    ]:
+        with pytest.raises(ValueError, match="positive"):
+            repository_type(timeout_seconds=0)
+
+
+def test_bcb_repository_returns_latest_official_quote() -> None:
+    observed_request: httpx.Request | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal observed_request
+        observed_request = request
+        return httpx.Response(
+            200,
+            json={
+                "value": [
+                    {
+                        "cotacaoCompra": 5.1234,
+                        "cotacaoVenda": 5.1334,
+                        "dataHoraCotacao": "2026-08-28 13:10:00.000",
+                    }
+                ]
+            },
+        )
+
+    repository = BcbPtaxExchangeRateRepository(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    quote = repository.get_brl_quote(currency="USD")
+
+    assert quote.buy_rate == Decimal("5.1234")
+    assert quote.sell_rate == Decimal("5.1334")
+    assert quote.quoted_at == datetime(2026, 8, 28, 16, 10, tzinfo=UTC)
+    assert observed_request is not None
+    assert str(observed_request.url).startswith(BCB_PTAX_BASE_URL)
+    assert observed_request.url.params["@moeda"] == "'USD'"
+    assert observed_request.url.params["$top"] == "1"
+
+
+def test_exchange_repository_falls_back_when_primary_is_unavailable() -> None:
+    primary = AwesomeApiExchangeRateRepository(
+        client=httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(429)))
+    )
+    fallback = BcbPtaxExchangeRateRepository(
+        client=httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    json={
+                        "value": [
+                            {
+                                "cotacaoCompra": 5,
+                                "cotacaoVenda": 5.1,
+                                "dataHoraCotacao": "2026-08-28 13:10:00.000",
+                            }
+                        ]
+                    },
+                )
+            )
+        )
+    )
+
+    quote = FallbackExchangeRateRepository(
+        primary=primary,
+        fallback=fallback,
+    ).get_brl_quote(currency="USD")
+
+    assert quote.buy_rate == Decimal("5")
+
+
+def test_frankfurter_repository_returns_daily_reference_rate() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == f"{FRANKFURTER_RATE_BASE_URL}/USD/BRL"
+        return httpx.Response(
+            200,
+            json={"date": "2026-08-28", "base": "USD", "quote": "BRL", "rate": 5.42},
+        )
+
+    repository = FrankfurterExchangeRateRepository(
+        client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    quote = repository.get_brl_quote(currency="USD")
+
+    assert quote.buy_rate == Decimal("5.42")
+    assert quote.sell_rate == Decimal("5.42")
+    assert quote.quoted_at == datetime(2026, 8, 28, tzinfo=UTC)

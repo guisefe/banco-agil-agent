@@ -18,7 +18,7 @@ from app.models.exchange import ExchangeQuote
 from app.models.intent import IntentInterpretation
 from app.repositories.credit import CreditRepositoryError
 from app.repositories.customers import CustomerRepositoryError
-from app.services.intent import (
+from app.services.understanding import (
     ConversationInterpreter,
     ExpectedField,
     FieldInterpretation,

@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import dotenv_values
+
 from app.audit.privacy import MIN_PSEUDONYMIZATION_KEY_BYTES
 
 AUDIT_KEY_ENVIRONMENT_VARIABLE = "AUDIT_PSEUDONYMIZATION_KEY"
@@ -41,7 +43,15 @@ def load_settings(
     environment: Mapping[str, str] | None = None,
 ) -> Settings:
     resolved_root = project_root or Path(__file__).resolve().parent.parent
-    source_environment = environment if environment is not None else os.environ
+    if environment is None:
+        dotenv_environment = {
+            key: value
+            for key, value in dotenv_values(resolved_root / ".env").items()
+            if value is not None
+        }
+        source_environment: Mapping[str, str] = {**dotenv_environment, **os.environ}
+    else:
+        source_environment = environment
     configured_key = source_environment.get(AUDIT_KEY_ENVIRONMENT_VARIABLE)
 
     if configured_key is None:
@@ -73,6 +83,9 @@ def load_settings(
     ).strip()
     if llm_api_key is not None and (not llm_base_url or not llm_model):
         raise ConfigurationError("LLM base URL and model must not be blank when LLM is enabled")
+    raw_exchange_api_key = source_environment.get(EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE)
+    exchange_api_key = raw_exchange_api_key.strip() if raw_exchange_api_key else None
+    exchange_api_key = exchange_api_key or None
 
     return Settings(
         project_root=resolved_root,
@@ -80,7 +93,7 @@ def load_settings(
         score_policy_file=resolved_root / "data" / "score_limite.csv",
         credit_request_file=resolved_root / "data" / "solicitacoes_aumento_limite.csv",
         audit_file=resolved_root / "data" / "audit_events.jsonl",
-        exchange_api_key=source_environment.get(EXCHANGE_API_KEY_ENVIRONMENT_VARIABLE),
+        exchange_api_key=exchange_api_key,
         pseudonymization_key=pseudonymization_key,
         uses_ephemeral_audit_key=uses_ephemeral_key,
         llm_api_key=llm_api_key,

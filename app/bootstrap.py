@@ -9,12 +9,18 @@ from app.config import Settings, load_settings
 from app.graph.workflow import ConversationWorkflow
 from app.repositories.credit import CsvCreditRequestRepository, CsvScorePolicyRepository
 from app.repositories.customers import CsvCustomerRepository
-from app.repositories.exchange import AwesomeApiExchangeRateRepository
-from app.services.intent import (
+from app.repositories.exchange import (
+    AwesomeApiExchangeRateRepository,
+    BcbPtaxExchangeRateRepository,
+    ExchangeRateRepository,
+    FallbackExchangeRateRepository,
+    FrankfurterExchangeRateRepository,
+)
+from app.services.understanding import (
     ConversationInterpreter,
-    DeterministicIntentInterpreter,
-    OpenAICompatibleIntentInterpreter,
-    ResilientIntentInterpreter,
+    DeterministicConversationInterpreter,
+    OpenAICompatibleConversationInterpreter,
+    ResilientConversationInterpreter,
 )
 
 
@@ -23,19 +29,33 @@ class Application:
     workflow: ConversationWorkflow
     uses_ephemeral_audit_key: bool
     uses_llm: bool
+    exchange_mode: str
 
 
 def build_application(*, settings: Settings | None = None) -> Application:
     resolved_settings = settings or load_settings()
     audit_writer = JsonlAuditWriter(resolved_settings.audit_file)
     customer_repository = CsvCustomerRepository(resolved_settings.customer_file)
-    deterministic_interpreter = DeterministicIntentInterpreter()
-    intent_interpreter: ConversationInterpreter
+    exchange_repository: ExchangeRateRepository = FallbackExchangeRateRepository(
+        primary=BcbPtaxExchangeRateRepository(),
+        fallback=FrankfurterExchangeRateRepository(),
+    )
+    exchange_mode = "PTAX com fallback de referência"
+    if resolved_settings.exchange_api_key is not None:
+        exchange_repository = FallbackExchangeRateRepository(
+            primary=AwesomeApiExchangeRateRepository(
+                api_key=resolved_settings.exchange_api_key,
+            ),
+            fallback=exchange_repository,
+        )
+        exchange_mode = "AwesomeAPI com fallback PTAX/referência"
+    deterministic_interpreter = DeterministicConversationInterpreter()
+    conversation_interpreter: ConversationInterpreter
     if resolved_settings.llm_api_key is None:
-        intent_interpreter = deterministic_interpreter
+        conversation_interpreter = deterministic_interpreter
     else:
-        intent_interpreter = ResilientIntentInterpreter(
-            primary=OpenAICompatibleIntentInterpreter(
+        conversation_interpreter = ResilientConversationInterpreter(
+            primary=OpenAICompatibleConversationInterpreter(
                 api_key=resolved_settings.llm_api_key,
                 base_url=resolved_settings.llm_base_url,
                 model=resolved_settings.llm_model,
@@ -46,7 +66,7 @@ def build_application(*, settings: Settings | None = None) -> Application:
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        intent_interpreter=intent_interpreter,
+        intent_interpreter=conversation_interpreter,
     )
     credit_agent = CreditAgent(
         customer_repository=customer_repository,
@@ -54,22 +74,20 @@ def build_application(*, settings: Settings | None = None) -> Application:
         request_repository=CsvCreditRequestRepository(resolved_settings.credit_request_file),
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
-        intent_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
+        intent_interpreter=conversation_interpreter,
     )
     interview_agent = CreditInterviewAgent(
         customer_repository=customer_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
     )
     exchange_agent = ExchangeAgent(
-        exchange_repository=AwesomeApiExchangeRateRepository(
-            api_key=resolved_settings.exchange_api_key,
-        ),
+        exchange_repository=exchange_repository,
         audit_writer=audit_writer,
         pseudonymization_key=resolved_settings.pseudonymization_key,
-        field_interpreter=intent_interpreter,
+        field_interpreter=conversation_interpreter,
     )
     return Application(
         workflow=ConversationWorkflow(
@@ -82,4 +100,5 @@ def build_application(*, settings: Settings | None = None) -> Application:
         ),
         uses_ephemeral_audit_key=resolved_settings.uses_ephemeral_audit_key,
         uses_llm=resolved_settings.llm_api_key is not None,
+        exchange_mode=exchange_mode,
     )

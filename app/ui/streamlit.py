@@ -40,9 +40,12 @@ def render_app() -> None:
                 "Demonstração usando chave de auditoria efêmera. "
                 "Configure AUDIT_PSEUDONYMIZATION_KEY para uma referência estável."
             )
-        if st.button("Nova conversa", use_container_width=True):
-            _reset_conversation(application)
-            st.rerun()
+        st.button(
+            "Nova conversa",
+            use_container_width=True,
+            on_click=_reset_conversation,
+            args=(application,),
+        )
 
     for message in messages:
         with st.chat_message(message["role"]):

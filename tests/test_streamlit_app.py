@@ -97,6 +97,20 @@ def test_streamlit_app_can_start_new_conversation_after_end() -> None:
     assert len(app.chat_message) == 1
 
 
+def test_streamlit_app_can_reset_an_active_conversation() -> None:
+    app = make_app_test().run()
+    app.chat_input[0].set_value("00000000000").run()
+
+    assert len(app.chat_message) == 3
+
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert app.chat_input[0].disabled is False
+    assert len(app.chat_message) == 1
+    assert "CPF" in app.chat_message[0].markdown[0].value
+
+
 def test_streamlit_app_completes_exchange_quote(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

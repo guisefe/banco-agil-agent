@@ -64,7 +64,7 @@ Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 
 1. Abra o chat e envie “Olá”; confirme que o assistente só então saúda e solicita o CPF.
 2. Em uma nova conversa, envie diretamente “qual é meu limite?”; autentique-se como Ana e
-   confirme que o pedido é retomado sem precisar ser repetido.
+   confirme que o assistente a chama pelo nome e retoma o pedido sem precisar ser repetido.
 3. Pergunte “qual é meu score?” e escreva “preciso de um fôlego de quatro mil no cartão”.
 4. Confirme `LLM ativa` na barra lateral e veja a decisão determinística de crédito.
 5. Peça um limite menor que o atual, confirme a redução e consulte o limite novamente.
@@ -74,6 +74,9 @@ Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 8. Confirme que o pedido original é reanalisado sem redigitar o valor.
 9. Peça “quanto está a moeda dos Estados Unidos?”.
 10. Responda “não” após o serviço e confirme o encerramento quando solicitado.
+11. Em outra conversa, use o CPF não cadastrado `12345678901` e uma data válida. Confirme o
+    CPF ou corrija-o quando solicitado; o sistema deve respeitar as três tentativas, orientar um
+    canal de cadastro e se despedir antes de encerrar.
 
 Crédito altera os CSVs. Faça uma cópia de `data/` antes de repetir a demonstração.
 
@@ -96,6 +99,8 @@ O chat abre sem uma fala automática. A primeira mensagem do usuário ativa a se
 - “Olá” recebe uma saudação curta e o pedido de CPF;
 - um pedido direto, como “qual é a cotação do dólar?”, é guardado sem classificação;
 - CPF e nascimento são coletados e validados antes de qualquer interpretação de assunto;
+- quando a identidade confere, o assistente chama o cliente pelo nome e apresenta os serviços;
+- quando o CPF não consta na massa, o assistente pede confirmação antes de orientar o cadastro;
 - após a autenticação, a LLM ou o fallback interpreta o pedido guardado e o LangGraph faz o
   handoff interno.
 
@@ -206,6 +211,7 @@ busca geral; APIs cambiais têm contrato menor e mais simples de validar.
 | `não` após um serviço era tratado como intenção desconhecida | O fluxo não distinguia recusa de outro serviço da confirmação de encerramento. | Estado `awaiting_end_confirmation`, confirmação em duas etapas e despedida mais humana, funcionando sem LLM. |
 | Um valor menor era rejeitado como “aumento inválido” | A operação estava modelada somente como aumento. | A ação passou a ser “ajustar limite”: aumentos seguem a política; reduções exigem confirmação e auditoria próprias. |
 | O chat abria pedindo CPF sem interação | A criação da tela já executava o primeiro nó do grafo. | A UI abre vazia; a primeira mensagem registra o início e recebe uma saudação com pedido de CPF. O assunto só é interpretado após autenticação. |
+| O atendimento não reconhecia o cliente e CPF ausente parecia apenas uma senha incorreta | A autenticação retornava somente correspondência completa de CPF e nascimento. | Após receber os dois dados, o fluxo distingue nascimento incompatível de CPF não cadastrado, chama clientes autenticados pelo nome e confirma o CPF ausente antes de orientar cadastro e encerrar. |
 | Aprovação envolve cliente e histórico em arquivos diferentes | CSV não oferece transação entre arquivos. | Substituição atômica, seção crítica e compensação quando o segundo registro falha. |
 
 ## Dados e auditoria
@@ -226,6 +232,10 @@ A trilha JSONL registra evento, resultado, motivo e versão da política. Não c
 nascimento, score, renda, valores ou conversa completa. HMAC pseudonimiza a referência do
 cliente; não a torna anônima. O contrato e as limitações estão em
 [Privacidade e auditoria](docs/PRIVACY_AND_AUDIT.md).
+
+A mensagem explícita de CPF não cadastrado foi mantida para a demonstração solicitada. Em
+produção, ela deve ser revisada contra enumeração de clientes; uma instituição pode preferir
+uma resposta genérica e conduzir a confirmação por um canal autenticado.
 
 ## Estrutura
 
@@ -260,6 +270,8 @@ externa.
 Para validar o limite de três tentativas de autenticação, informe um CPF da massa e uma data
 válida, mas incompatível, como `01/01/2000`; repita o par CPF + nascimento três vezes. Entradas
 com formato inválido são corrigidas antes da consulta e não contam como tentativa de identidade.
+Para validar CPF não cadastrado, use `12345678901`, informe uma data válida e teste tanto “não”
+para corrigir quanto “sim, está correto” para receber a orientação e encerrar.
 
 ## Solução de problemas
 

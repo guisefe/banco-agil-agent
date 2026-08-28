@@ -16,6 +16,7 @@ TriageStage = Literal[
     "greeting",
     "awaiting_cpf",
     "awaiting_birth_date",
+    "confirming_unregistered_cpf",
     "awaiting_intent",
     "awaiting_end_confirmation",
 ]
@@ -40,6 +41,7 @@ ExchangeStage = Literal["awaiting_currency"]
 EndReason = Literal[
     "user_requested",
     "authentication_attempts_exceeded",
+    "customer_not_registered",
     "unrecoverable_error",
 ]
 

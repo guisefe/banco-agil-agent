@@ -22,6 +22,9 @@ class CustomerRepository(Protocol):
     def find_by_identity(self, *, cpf: str, birth_date: date) -> Customer | None:
         """Return the matching customer or None when the identity does not match."""
 
+    def get_by_cpf(self, *, cpf: str) -> Customer | None:
+        """Return one customer by CPF or None when it is not registered."""
+
 
 class CreditCustomerRepository(Protocol):
     def get_by_cpf(self, *, cpf: str) -> Customer | None:

@@ -95,6 +95,8 @@ class TriageAgent:
             return self._collect_cpf(next_state, user_message)
         if state["triage_stage"] == "awaiting_birth_date":
             return self._authenticate(next_state, user_message)
+        if state["triage_stage"] == "confirming_unregistered_cpf":
+            return self._confirm_unregistered_cpf(next_state, user_message)
         if state["triage_stage"] == "awaiting_intent":
             if _is_negative_response(user_message):
                 next_state["triage_stage"] = "awaiting_end_confirmation"
@@ -154,23 +156,15 @@ class TriageAgent:
                 birth_date=birth_date,
             )
         except CustomerRepositoryError:
-            self._append_event(
-                AuditEvent(
-                    event_type="authentication_attempted",
-                    conversation_id=state["conversation_id"],
-                    turn_number=state["turn_number"],
-                    agent="triage",
-                    outcome="failure",
-                    reason_code="CUSTOMER_REPOSITORY_UNAVAILABLE",
-                    subject_ref=subject_ref,
-                )
-            )
-            state["assistant_message"] = (
-                "Não consegui consultar seus dados agora. Tente novamente em alguns instantes."
-            )
-            return state
+            return self._repository_unavailable(state, subject_ref)
 
         if customer is None:
+            try:
+                registered_customer = self._customer_repository.get_by_cpf(cpf=cpf)
+            except CustomerRepositoryError:
+                return self._repository_unavailable(state, subject_ref)
+            if registered_customer is None:
+                return self._record_unregistered_customer(state, subject_ref)
             return self._record_failed_authentication(state, subject_ref)
 
         state["authenticated"] = True
@@ -178,7 +172,9 @@ class TriageAgent:
         state["customer_name"] = customer.name
         state["triage_stage"] = "awaiting_intent"
         state["assistant_message"] = (
-            f"Autenticação concluída, {customer.name}. Como posso ajudar com crédito ou câmbio?"
+            "Autenticação concluída. Posso consultar ou ajustar seu limite, informar seu score, "
+            "realizar uma entrevista financeira ou consultar a cotação de moedas. "
+            "Como posso ajudar?"
         )
         self._append_event(
             AuditEvent(
@@ -195,6 +191,110 @@ class TriageAgent:
         state["pending_initial_request"] = None
         if pending_request is not None:
             return self._route_intent(state, pending_request)
+        return state
+
+    def _record_unregistered_customer(
+        self,
+        state: ConversationState,
+        subject_ref: str,
+    ) -> ConversationState:
+        state["authentication_attempts"] += 1
+        self._append_event(
+            AuditEvent(
+                event_type="authentication_attempted",
+                conversation_id=state["conversation_id"],
+                turn_number=state["turn_number"],
+                agent="triage",
+                outcome="failure",
+                reason_code="CPF_NOT_REGISTERED",
+                subject_ref=subject_ref,
+            )
+        )
+        if state["authentication_attempts"] >= MAX_AUTHENTICATION_ATTEMPTS:
+            return self._finish_unregistered_customer(state, subject_ref)
+        state["triage_stage"] = "confirming_unregistered_cpf"
+        state["assistant_message"] = (
+            "Não localizei esse CPF entre os clientes do Banco Ágil. Confira se digitou "
+            "corretamente. Esse CPF está correto? Responda sim para confirmar ou não para "
+            "digitá-lo novamente."
+        )
+        return state
+
+    def _confirm_unregistered_cpf(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
+        if _is_affirmative_response(user_message):
+            cpf = state["cpf"]
+            if cpf is None:
+                raise ValueError("cpf is required while confirming registration")
+            return self._finish_unregistered_customer(
+                state,
+                pseudonymize_subject(cpf, key=self._pseudonymization_key),
+            )
+        if _is_negative_response(user_message):
+            remaining_attempts = MAX_AUTHENTICATION_ATTEMPTS - state["authentication_attempts"]
+            state["cpf"] = None
+            state["birth_date"] = None
+            state["triage_stage"] = "awaiting_cpf"
+            state["assistant_message"] = (
+                "Tudo bem. Informe o CPF novamente. "
+                f"Você ainda tem {remaining_attempts} tentativa(s)."
+            )
+            return state
+        state["assistant_message"] = (
+            "Só para confirmar: responda sim se o CPF estiver correto ou não para digitá-lo "
+            "novamente."
+        )
+        return state
+
+    def _finish_unregistered_customer(
+        self,
+        state: ConversationState,
+        subject_ref: str,
+    ) -> ConversationState:
+        ended_state = end_conversation(
+            state,
+            reason="customer_not_registered",
+            assistant_message=(
+                "Não encontramos um cadastro para esse CPF nesta demonstração do Banco Ágil. "
+                "Para se cadastrar, procure um canal de atendimento ou uma agência. "
+                "Obrigado pelo contato e tenha um ótimo dia!"
+            ),
+        )
+        self._append_event(
+            AuditEvent(
+                event_type="conversation_ended",
+                conversation_id=state["conversation_id"],
+                turn_number=state["turn_number"],
+                agent="triage",
+                outcome="failure",
+                reason_code="CUSTOMER_NOT_REGISTERED",
+                subject_ref=subject_ref,
+            )
+        )
+        return ended_state
+
+    def _repository_unavailable(
+        self,
+        state: ConversationState,
+        subject_ref: str,
+    ) -> ConversationState:
+        self._append_event(
+            AuditEvent(
+                event_type="authentication_attempted",
+                conversation_id=state["conversation_id"],
+                turn_number=state["turn_number"],
+                agent="triage",
+                outcome="failure",
+                reason_code="CUSTOMER_REPOSITORY_UNAVAILABLE",
+                subject_ref=subject_ref,
+            )
+        )
+        state["assistant_message"] = (
+            "Não consegui consultar seus dados agora. Tente novamente em alguns instantes."
+        )
         return state
 
     def _record_failed_authentication(
@@ -401,6 +501,9 @@ def _is_affirmative_response(message: str) -> bool:
         "pode finalizar",
         "claro",
         "por favor",
+        "sim esta correto",
+        "esta correto",
+        "correto",
     }
 
 
@@ -415,6 +518,10 @@ def _is_negative_response(message: str) -> bool:
         "nao preciso de outro servico",
         "nao quero fazer mais nada",
         "nao quero fazer mais nada por enquanto",
+        "nao esta correto",
+        "digitei errado",
+        "esta errado",
+        "cpf errado",
         "quero continuar",
     }
 

@@ -99,7 +99,18 @@ class ConversationWorkflow:
             return self._end_by_user_request(state, user_message)
         graph_input = state.copy()
         graph_input["user_message"] = user_message
-        return self._invoke(graph_input)
+        result = self._invoke(graph_input)
+        if not state["authenticated"] and result["authenticated"]:
+            customer_name = result["customer_name"]
+            if customer_name is None:
+                raise ValueError("authenticated conversation requires customer name")
+            first_name = customer_name.split(maxsplit=1)[0]
+            personalized_result = result.copy()
+            personalized_result["assistant_message"] = (
+                f"Olá, {first_name}! {result['assistant_message']}"
+            )
+            return personalized_result
+        return result
 
     def _run_triage(self, state: ConversationState) -> ConversationState:
         if state["triage_stage"] == "greeting":

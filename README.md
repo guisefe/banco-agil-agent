@@ -3,16 +3,35 @@
 [![CI](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 [![LangGraph](https://img.shields.io/badge/orquestração-LangGraph-1C3C3C?logo=langgraph&logoColor=white)](https://github.com/langchain-ai/langgraph)
+[![Streamlit](https://img.shields.io/badge/interface-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+![Coverage gate](https://img.shields.io/badge/coverage%20gate-%E2%89%A590%25-brightgreen)
 ![Status](https://img.shields.io/badge/status-MVP%20completo-brightgreen)
 
-Assistente bancário desenvolvido para o desafio técnico da Tech For Humans. O cliente conversa
-por uma única interface Streamlit; internamente, quatro agentes LangGraph cuidam de Triagem,
-Crédito, Entrevista de Crédito e Câmbio.
+Sistema conversacional multiagente para atendimento bancário, com uma interface única e quatro
+especialidades internas: Triagem, Crédito, Entrevista de Crédito e Câmbio. O LangGraph coordena
+estado e handoffs; a Groq interpreta linguagem natural; regras determinísticas em Python
+controlam autenticação, score, decisões de crédito, persistência e auditoria.
 
-> **A LLM entende a mensagem; o código aplica as regras.** Autenticação, score, aprovação,
-> persistência e auditoria nunca dependem da resposta do modelo.
+> **A LLM entende a mensagem; o domínio toma a decisão.** Nenhuma aprovação, autenticação ou
+> atualização financeira depende de texto gerado pelo modelo.
 
-## Executar em 5 minutos
+## Visão geral
+
+O projeto implementa um atendimento completo do primeiro contato ao encerramento, preservando
+uma separação explícita entre experiência conversacional e regra bancária.
+
+| Capacidade | Garantia implementada |
+| --- | --- |
+| Orquestração | Exatamente quatro agentes, estado tipado e handoffs invisíveis ao cliente. |
+| Autenticação | CPF + nascimento, no máximo três tentativas e nenhum roteamento anterior à validação. |
+| Crédito | Consulta e ajuste de limite com política reproduzível carregada de CSV. |
+| Entrevista | Cinco respostas estruturadas, score entre 0 e 1000 e reanálise automática. |
+| Câmbio | Cotação com cadeia de provedores, timeout, retry e falha controlada. |
+| Linguagem natural | Groq com JSON Schema estrito e fallback determinístico. |
+| Segurança | Segredos externos, dados sintéticos, mascaramento na UI e auditoria pseudonimizada. |
+| Qualidade | Ruff, MyPy estrito, Pytest com cobertura mínima e container validado na CI. |
+
+## Executar localmente
 
 Requisitos: Python 3.12 e [uv](https://docs.astral.sh/uv/).
 
@@ -25,83 +44,48 @@ uv sync --locked --dev
 uv run streamlit run streamlit_app.py
 ```
 
-Abra `http://localhost:8501`. Se a pasta já existir, entre nela e comece em
-`cp .env.example .env`; não faça outro clone dentro do primeiro.
+Acesse `http://localhost:8501`. Se o repositório já estiver clonado, use a pasta existente; não
+crie uma segunda cópia dentro dela.
 
-### Ativar a LLM
+### Configurar a LLM
 
-Edite `.env` e informe sua chave:
+Adicione uma chave válida ao `.env`:
 
 ```dotenv
 GROQ_API_KEY=sua-chave-groq
 LLM_MODEL=openai/gpt-oss-20b
 ```
 
-O arquivo é carregado automaticamente. Depois de alterar a chave, pare o Streamlit com
-`Ctrl+C` e inicie novamente. Sem chave, a aplicação continua disponível, mas usa somente o
-fallback local — esse modo não demonstra a integração com LLM.
-
-A barra lateral informa o que aconteceu no último turno:
+Reinicie o Streamlit depois de alterar o arquivo. A barra lateral deixa o modo efetivamente
+usado no último turno visível:
 
 - `LLM ativa`: a Groq interpretou a mensagem;
-- `LLM falhou — fallback ativo`: houve timeout, erro HTTP ou saída inválida;
+- `LLM falhou — fallback ativo`: timeout, erro HTTP ou saída inválida acionou o fallback;
 - `fallback local`: nenhuma chave foi configurada;
-- `LLM configurada — aguardando mensagem`: a chave foi lida, mas ainda não houve chamada.
+- `LLM configurada — aguardando mensagem`: a chave foi carregada, mas ainda não houve chamada.
 
-### Dados fictícios para demonstração
+Sem chave, a aplicação continua funcional para contingência, mas não demonstra a integração
+com a LLM.
 
-| Cenário | CPF | Nascimento | Uso sugerido |
+### Configurar cotação em tempo real
+
+`EXCHANGE_API_KEY` habilita a AwesomeAPI como primeira fonte. Sem a chave, a aplicação utiliza
+a PTAX do Banco Central e, se necessário, a taxa diária de referência da Frankfurter.
+
+## Dados de demonstração
+
+Todos os registros são sintéticos e existem apenas para exercitar regras distintas.
+
+| Cliente | CPF | Nascimento | Cenário principal |
 | --- | --- | --- | --- |
 | Ana Martins | `00000000000` | `20/05/1990` | Consultar score/limite e testar aumento ou redução. |
-| Mariana Souza | `22222222222` | `14/02/1995` | Testar cliente sem score e entrevista. |
-| João Pereira | `33333333333` | `08/09/1978` | Exercitar score baixo e possível rejeição. |
-| Fernanda Alves | `66666666666` | `30/06/1975` | Validar a fronteira superior da primeira faixa (`299`). |
-| Rafael Lima | `77777777777` | `11/07/1992` | Validar a fronteira inicial da segunda faixa (`300`). |
+| Mariana Souza | `22222222222` | `14/02/1995` | Cliente sem score e encaminhamento para entrevista. |
+| João Pereira | `33333333333` | `08/09/1978` | Score baixo e possível rejeição. |
+| Rafael Lima | `77777777777` | `11/07/1992` | Fronteira inicial da faixa de score `300`. |
+| Diego Nascimento | `99999999999` | `05/01/2002` | Personalização e score máximo `1000`. |
 
-Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
-
-### Roteiro manual principal
-
-1. Abra o chat e envie “Olá”; confirme que o assistente só então saúda e solicita o CPF.
-2. Em uma nova conversa, envie diretamente “qual é meu limite?”; autentique-se como Ana e
-   confirme que o pedido é retomado sem precisar ser repetido.
-3. Pergunte “qual é meu score?” e escreva “preciso de um fôlego de quatro mil no cartão”.
-4. Confirme `LLM ativa` na barra lateral e veja a decisão determinística de crédito.
-5. Peça um limite menor que o atual, confirme a redução e consulte o limite novamente.
-6. Inicie outra conversa como Mariana e solicite um aumento.
-7. Conclua a entrevista com respostas naturais, como “trabalho registrado” e “não tenho
-   dívidas”.
-8. Confirme que o pedido original é reanalisado sem redigitar o valor.
-9. Peça “quanto está a moeda dos Estados Unidos?”.
-10. Responda “não” após o serviço e confirme o encerramento quando solicitado.
-
-Crédito altera os CSVs. Faça uma cópia de `data/` antes de repetir a demonstração.
-
-## Funcionalidades entregues
-
-| Agente | Responsabilidade |
-| --- | --- |
-| Triagem | Ativa a conversa após a primeira mensagem, autentica por CPF + nascimento em até três tentativas e só então identifica o pedido. |
-| Crédito | Consulta score/limite, decide aumentos pela política e confirma reduções solicitadas. |
-| Entrevista | Coleta cinco dados financeiros, recalcula o score e retorna para reanálise. |
-| Câmbio | Consulta USD, EUR, ARS, GBP ou JPY e retorna à Triagem. |
-
-O usuário pode encerrar a conversa em qualquer etapa. Os handoffs são internos e nenhum agente
-bancário é acessado antes da autenticação.
-
-### Início da conversa
-
-O chat abre sem uma fala automática. A primeira mensagem do usuário ativa a sessão:
-
-- “Olá” recebe uma saudação curta e o pedido de CPF;
-- um pedido direto, como “qual é a cotação do dólar?”, é guardado sem classificação;
-- CPF e nascimento são coletados e validados antes de qualquer interpretação de assunto;
-- após a autenticação, a LLM ou o fallback interpreta o pedido guardado e o LangGraph faz o
-  handoff interno.
-
-Essa ordem evita uma mensagem não solicitada na abertura e segue literalmente o desafio:
-saudação, CPF, nascimento, autenticação, identificação do assunto e redirecionamento. Nenhum
-agente especializado nem a LLM de entendimento é acionado antes da autenticação.
+Operações de crédito alteram os CSVs. Preserve uma cópia de `data/` quando precisar repetir a
+mesma demonstração desde o estado inicial.
 
 ## Arquitetura
 
@@ -120,38 +104,81 @@ flowchart TD
     U --> F[Fallback local]
     C --> CSV[(CSVs)]
     E --> CSV
-    X --> API[AwesomeAPI / BCB]
+    X --> API[AwesomeAPI / BCB / Frankfurter]
 ```
 
-O grafo guarda estado, autenticação e etapa atual. Os agentes concentram a conversa; modelos e
-serviços aplicam as regras; repositórios isolam CSVs e APIs externas. Essa separação permite
-testar o fluxo sem depender da rede nem misturar decisão bancária com geração de texto.
+O grafo mantém o estado da sessão, controla transições e encerra qualquer fluxo de forma
+uniforme. Os agentes concentram a interação; modelos representam o domínio; serviços tratam
+linguagem; repositórios isolam arquivos e APIs. Isso permite testar regras críticas sem rede e
+substituir infraestrutura sem reescrever o fluxo bancário.
 
-### Participação da LLM
+### Responsabilidades dos agentes
 
-A Groq recebe somente a mensagem do assunto depois da autenticação. Se o usuário já informou o
-pedido na primeira mensagem, o texto é mantido temporariamente sem classificação e enviado ao
-entendimento apenas quando a identidade for confirmada. A LLM é usada para:
+| Agente | Responsabilidade | Saída principal |
+| --- | --- | --- |
+| Triagem | Ativar a sessão, autenticar e identificar o assunto somente após a identidade ser confirmada. | Handoff para Crédito, Entrevista ou Câmbio. |
+| Crédito | Consultar score/limite e processar aumento, redução ou manutenção do limite. | Decisão persistida ou oferta de entrevista. |
+| Entrevista | Coletar renda, emprego, despesas, dependentes e dívidas. | Novo score e retorno para reanálise. |
+| Câmbio | Identificar uma moeda suportada e buscar sua cotação em reais. | Cotação contextualizada e retorno à Triagem. |
 
-- classificar intenção dentro de uma lista fechada;
-- extrair moeda e o novo limite total desejado;
-- normalizar renda, emprego, despesas, dependentes e respostas sim/não.
+O cliente permanece em uma única interface e não precisa conhecer os handoffs internos.
 
-A API devolve JSON Schema estrito, validado novamente pelo domínio. Há duas tentativas para
-falhas transitórias; depois disso, o fallback local mantém o atendimento. CPF e nascimento são
-substituídos antes do envio. Nome, score, limite atual, perfil armazenado, política de crédito e
-histórico da conversa não entram no prompt.
+### Fluxo de autenticação e roteamento
 
-### Fluxo de crédito
+1. A interface abre sem iniciar uma conversa automaticamente.
+2. A primeira mensagem ativa a Triagem e recebe uma saudação com solicitação de CPF.
+3. O agente coleta a data de nascimento e valida a identidade no `clientes.csv`.
+4. Após sucesso, o atendimento usa o primeiro nome do cliente e retoma o pedido inicial.
+5. Somente então a LLM ou o fallback identifica o assunto e o LangGraph executa o handoff.
 
-`score_limite.csv` define o limite máximo de cada faixa. Um cliente sem score não é tratado
-como zero e não recebe crédito automaticamente: a solicitação fica pendente, a entrevista é
-oferecida e o mesmo valor é reanalisado após a atualização.
+Pedidos enviados na primeira mensagem são mantidos temporariamente sem classificação. CPF não
+cadastrado recebe confirmação, possibilidade de correção e orientação antes do encerramento.
+CPF existente com nascimento incompatível segue o limite independente de três tentativas.
 
-“Ajustar limite” é a operação apresentada ao cliente. Quando o valor desejado é maior, o fluxo
-continua sendo a solicitação de aumento exigida no desafio e passa pela política de score. Quando
-é menor, o agente pede confirmação explícita e persiste a redução sem criar uma falsa linha no
-CSV de aumentos. Se o valor for igual ao atual, apenas informa que nenhum ajuste é necessário.
+Essa ordem preserva o contrato vinculante: saudação, CPF, nascimento, autenticação,
+identificação do assunto e redirecionamento.
+
+### Fronteira entre LLM e regras de negócio
+
+| Responsabilidade | Implementação |
+| --- | --- |
+| Intenção e entidades em linguagem livre | Groq preferencialmente; fallback local em contingência. |
+| Autenticação e limite de tentativas | Python + repositório de clientes. |
+| Score e decisão de crédito | Fórmula e política determinísticas. |
+| Valores monetários | `Decimal`, sem decisão baseada em `float`. |
+| Persistência e compensação | Repositórios CSV sob seção crítica. |
+| Auditoria e pseudonimização | Eventos tipados + HMAC-SHA-256. |
+
+A Groq recebe apenas a mensagem corrente depois da autenticação, limitada a 1.000 caracteres.
+CPF e padrões de nascimento são substituídos antes da chamada. Nome, score, limite atual,
+perfil armazenado, política e histórico completo não entram no prompt.
+
+O modelo classifica uma intenção fechada e normaliza campos esperados. A resposta usa JSON
+Schema estrito e passa por nova validação de domínio. Há duas tentativas para falhas transitórias;
+timeout, erro HTTP, JSON inválido ou valor inconsistente ativam o fallback determinístico.
+
+## Fluxos de negócio
+
+### Crédito
+
+`score_limite.csv` define o limite máximo permitido em cada faixa. O LLM não participa da
+aprovação. Um cliente sem score não é tratado como score zero: a análise fica pendente, a
+entrevista é oferecida e o valor originalmente solicitado é reanalisado após o recálculo.
+
+“Ajustar limite” é a operação apresentada ao cliente:
+
+- aumento: passa pela política de score e gera uma solicitação auditável;
+- redução: exige confirmação explícita e não cria uma falsa solicitação de aumento;
+- valor igual ao atual: informa que nenhuma alteração é necessária.
+
+Escritas usam arquivo temporário, substituição atômica e seção crítica. Quando a atualização do
+cliente e o histórico da solicitação não podem ser concluídos em conjunto, o fluxo aplica
+compensação para evitar uma aprovação parcialmente persistida.
+
+### Entrevista de crédito
+
+O score é calculado a partir de renda mensal, tipo de emprego, despesas fixas, dependentes e
+dívidas ativas:
 
 ```text
 (renda / (despesas + 1)) * peso_renda
@@ -160,90 +187,96 @@ CSV de aumentos. Se o valor for igual ao atual, apenas informa que nenhum ajuste
 + peso_dividas
 ```
 
-O resultado é arredondado e limitado entre 0 e 1000; score negativo não é persistido. Valores
-monetários usam `Decimal`. Escritas usam arquivo temporário + substituição, seção crítica e
-compensação quando a atualização do limite e o registro da solicitação não podem ser concluídos
-juntos.
+O resultado usa arredondamento explícito e é limitado ao intervalo de 0 a 1000. Valores
+financeiros usam `Decimal`; respostas financeiras são removidas do estado ao concluir ou
+encerrar. Após a atualização, o grafo retorna ao Crédito e reanalisa o pedido pendente sem pedir
+o valor novamente.
 
-### Fluxo de câmbio
+### Câmbio
 
-- Com `EXCHANGE_API_KEY`, a AwesomeAPI fornece a cotação em tempo real.
-- Se ela estiver ausente ou falhar, o sistema consulta a última PTAX disponível na API oficial
-  do Banco Central do Brasil.
-- Se o BCB estiver temporariamente inacessível, uma taxa diária de referência da Frankfurter
-  mantém o fluxo disponível sem exigir outra chave. Nesse caso, a interface não chama o valor
-  de compra/venda, pois se trata de uma taxa de referência.
-- Timeout, resposta inválida e indisponibilidade produzem mensagem controlada, sem travar a
-  sessão.
+A consulta suporta USD, EUR, ARS, GBP e JPY. A cadeia de provedores é:
 
-## Decisões técnicas
+1. AwesomeAPI, quando `EXCHANGE_API_KEY` está configurada;
+2. última PTAX disponível na API oficial do Banco Central;
+3. taxa diária de referência da Frankfurter.
 
-| Escolha | Por que foi adotada | Trade-off aceito |
+A resposta identifica quando o valor é compra/venda ou apenas taxa de referência. Timeout,
+payload inválido e indisponibilidade são tratados sem interromper abruptamente a sessão.
+
+## Escolhas técnicas e justificativas
+
+| Escolha | Justificativa | Trade-off assumido |
 | --- | --- | --- |
-| LangGraph | Autenticação, handoffs, encerramento global e o ciclo Entrevista → Crédito formam uma máquina de estados explícita. | Mais estrutura que condicionais simples, em troca de transições visíveis e testáveis. |
-| Groq | Baixa latência, JSON Schema no modelo escolhido e endpoint compatível com OpenAI. | Dependência de rede e fornecedor, mitigada por configuração e fallback local. |
-| Interpretação híbrida | A LLM entende linguagem livre; Python e CSV preservam autenticação, score e decisão reproduzíveis. | O fallback entende menos variações, mas o fluxo crítico continua disponível. |
-| Início reativo | A sessão só começa após uma mensagem; o texto inicial pode ser guardado, mas só é interpretado depois da autenticação. | Acrescenta um campo temporário ao estado, em troca de evitar repetição sem inverter a ordem do PDF. |
-| AwesomeAPI + BCB + Frankfurter | Combina tempo real opcional, referência brasileira oficial e uma fonte diária sem chave. | As fontes podem divergir; por isso a resposta identifica compra/venda ou taxa de referência. |
-| Repositórios sobre CSV | O PDF exige os arquivos e o domínio não deve depender de leitura direta. | CSV não é banco transacional; escrita atômica, lock e compensação são limites do MVP. |
-| Streamlit | É requisito da entrega e demonstra todo o atendimento com pouca infraestrutura. | Sessão local e execução em processo único, suficientes apenas para demonstração. |
+| LangGraph | Autenticação, handoffs, encerramento global e o ciclo Entrevista → Crédito formam uma máquina de estados explícita. | Mais estrutura que condicionais simples, em troca de transições rastreáveis e testáveis. |
+| Groq | Baixa latência, JSON Schema no modelo configurado e endpoint compatível com OpenAI. | Dependência de rede e fornecedor, mitigada por timeout, retry e fallback. |
+| Arquitetura híbrida | A LLM absorve variações de linguagem; o domínio preserva decisões reproduzíveis. | O fallback entende menos formulações, mas mantém o caminho crítico disponível. |
+| Repositórios sobre CSV | Os arquivos fazem parte do contrato da solução e ficam isolados das regras. | CSV não substitui um banco transacional multi-instância. |
+| Streamlit | Atende à interface exigida e permite demonstrar o fluxo completo com pouca infraestrutura. | Sessão local e processo único são adequados ao MVP, não à operação bancária real. |
+| AwesomeAPI + BCB + Frankfurter | Combina tempo real opcional, referência oficial brasileira e contingência sem chave. | Fontes têm semânticas distintas; a resposta precisa informar qual taxa está exibindo. |
 
-Alternativas do PDF também foram avaliadas: CrewAI privilegia colaboração autônoma, enquanto
-este fluxo exige ordem previsível; LlamaIndex seria útil para RAG, que não existe aqui;
-LangChain ampliaria a superfície sem substituir a máquina de estados; Google ADK é válido, mas
-introduziria outro modelo operacional para um fluxo pequeno. Tavily e SerpAPI são mecanismos de
-busca geral; APIs cambiais têm contrato menor e mais simples de validar.
+CrewAI foi descartado porque privilegia colaboração mais autônoma, enquanto este atendimento
+exige ordem previsível. LlamaIndex seria apropriado para RAG, que não faz parte do domínio.
+LangChain ampliaria a superfície sem substituir a máquina de estados. Google ADK é uma opção
+válida, mas introduziria outro modelo operacional sem benefício proporcional neste fluxo.
+Tavily e SerpAPI são mecanismos de busca geral; APIs cambiais oferecem contratos menores e mais
+fáceis de validar para este caso.
 
 ## Desafios enfrentados e como foram resolvidos
 
-| Problema observado | Causa | Solução adotada |
+| Desafio | Risco técnico | Solução |
 | --- | --- | --- |
-| Streamlit e dependências pareciam ausentes | A `main` local estava desatualizada e havia outra cópia do repositório dentro da pasta. | Execução a partir da raiz correta, branch explícita, `uv sync --locked --dev` e instruções de diagnóstico. |
-| Chave Groq existia, mas a interface mostrava fallback local | Variável exportada valia apenas no terminal e o `.env` não era carregado. | Carregamento automático do `.env`, sem sobrescrever variáveis reais do processo, e status visível na interface. |
-| LLM retornava JSON menos previsível | O cliente usava JSON Object Mode. | JSON Schema estrito na Groq, validação de domínio, duas tentativas transitórias e fallback determinístico. |
-| Cotação falhava quando um provedor estava indisponível | AwesomeAPI podia limitar chamadas e o BCB podia estar inacessível pela rede. | Cadeia AwesomeAPI → PTAX/BCB → Frankfurter, com timeout e linguagem correta para taxa de referência. |
-| “Nova conversa” não reiniciava uma sessão ativa no navegador | O teste cobria apenas conversas já encerradas e o rerun era controlado manualmente. | Callback de sessão do Streamlit e teste específico durante conversa ativa. |
-| `não` após um serviço era tratado como intenção desconhecida | O fluxo não distinguia recusa de outro serviço da confirmação de encerramento. | Estado `awaiting_end_confirmation`, confirmação em duas etapas e despedida mais humana, funcionando sem LLM. |
-| Um valor menor era rejeitado como “aumento inválido” | A operação estava modelada somente como aumento. | A ação passou a ser “ajustar limite”: aumentos seguem a política; reduções exigem confirmação e auditoria próprias. |
-| O chat abria pedindo CPF sem interação | A criação da tela já executava o primeiro nó do grafo. | A UI abre vazia; a primeira mensagem registra o início e recebe uma saudação com pedido de CPF. O assunto só é interpretado após autenticação. |
-| Aprovação envolve cliente e histórico em arquivos diferentes | CSV não oferece transação entre arquivos. | Substituição atômica, seção crítica e compensação quando o segundo registro falha. |
+| Preservar autenticação antes do entendimento | Interpretar o pedido cedo demais violaria a ordem do atendimento. | O pedido inicial fica pendente e só é classificado após CPF + nascimento. |
+| Entender linguagem natural sem terceirizar decisões | Uma resposta probabilística poderia alterar autenticação ou crédito. | LLM restrita a intenção/extração; regras críticas permanecem determinísticas. |
+| Diferenciar score ausente de score zero | Tratar ausência como zero produziria uma decisão incorreta. | `None` suspende a análise e oferece entrevista; zero continua sendo um score válido. |
+| Manter consistência entre arquivos | CSVs não oferecem transação distribuída. | Lock, substituição atômica e compensação em falhas parciais. |
+| Conviver com serviços externos instáveis | Falhas da LLM ou cotação poderiam travar o atendimento. | Timeout, retry, fallback encadeado e mensagens de erro controladas. |
+| Encerrar com naturalidade em qualquer agente | Uma negativa curta podia ser confundida com intenção desconhecida. | Estado de confirmação de encerramento e ferramenta global de finalização. |
+| Auditar sem copiar dados sensíveis | Logs completos aumentariam exposição de identidade e finanças. | Eventos estruturados, reason codes fechados, minimização e HMAC. |
 
-## Dados e auditoria
+## Dados, auditoria e privacidade
 
-| Arquivo | Uso |
+| Arquivo | Responsabilidade |
 | --- | --- |
-| `data/clientes.csv` | Identidade fictícia, limite atual e score opcional. |
-| `data/score_limite.csv` | Faixas de score e limite máximo. |
-| `data/solicitacoes_aumento_limite.csv` | Histórico de solicitações e resultado. |
+| `data/clientes.csv` | Identidade sintética, limite atual e score opcional. |
+| `data/score_limite.csv` | Cinco faixas completas de score e seus limites máximos. |
+| `data/solicitacoes_aumento_limite.csv` | Histórico gerado de solicitações e resultado. |
+| `data/audit_events.jsonl` | Trilha local de eventos; criada em execução e ignorada pelo Git. |
 
-`clientes.csv` inclui perfis sintéticos sem score, com score mínimo, máximo e valores de
-fronteira. `score_limite.csv` não recebe linhas extras porque suas cinco faixas já particionam
-todo o intervalo de 0 a 1000 sem lacunas ou sobreposição. O CSV de solicitações começa vazio,
-somente com cabeçalho, pois é uma saída produzida pelo sistema e não uma massa de entrada.
-Os nomes dos três arquivos permanecem os definidos no desafio.
+O CSV de clientes mantém cinco cenários representativos. A política particiona todo o intervalo
+de 0 a 1000 sem lacunas ou sobreposição. O histórico de solicitações começa apenas com o
+cabeçalho porque é uma saída do sistema.
 
-A trilha JSONL registra evento, resultado, motivo e versão da política. Não copia CPF,
-nascimento, score, renda, valores ou conversa completa. HMAC pseudonimiza a referência do
-cliente; não a torna anônima. O contrato e as limitações estão em
-[Privacidade e auditoria](docs/PRIVACY_AND_AUDIT.md).
+A auditoria registra identificadores de evento, horário UTC, agente, resultado, reason code,
+versão da política e referência pseudonimizada. Não registra CPF, nascimento, nome, score,
+renda, despesas, dívidas, valores solicitados, mensagens, prompts, respostas do modelo ou
+segredos. HMAC reduz exposição, mas continua sendo pseudonimização, não anonimização.
 
-## Estrutura
+A distinção explícita de CPF não cadastrado existe para demonstrar o fluxo solicitado. Em um
+produto real, essa mensagem precisaria de análise contra enumeração de clientes e poderia ser
+substituída por uma resposta genérica ou por confirmação em canal autenticado.
+
+O contrato detalhado está em [Privacidade e auditoria](docs/PRIVACY_AND_AUDIT.md).
+
+## Estrutura do projeto
 
 ```text
 app/
-├── agents/        # quatro agentes do desafio
+├── agents/        # quatro agentes e suas interações
 ├── graph/         # estado e transições LangGraph
 ├── services/      # entendimento híbrido da conversa
-├── repositories/  # CSVs e APIs externas
-├── models/        # tipos e regras de domínio
+├── repositories/  # persistência CSV e APIs externas
+├── models/        # tipos e invariantes de domínio
 ├── tools/         # CPF, dinheiro e encerramento
 ├── audit/         # eventos e persistência JSONL
 └── ui/            # interface Streamlit
-tests/             # unidade, integração, fluxo e interface
-data/              # fixtures sintéticas
+tests/             # domínio, repositórios, agentes, grafo e interface
+data/              # fixtures sintéticas e política de crédito
+docs/              # decisões complementares de privacidade e auditoria
 ```
 
-## Testes
+## Execução e testes
+
+### Gates locais
 
 ```bash
 uv run ruff format --check .
@@ -252,38 +285,63 @@ uv run mypy app tests
 uv run pytest
 ```
 
-A CI repete os gates, exige ao menos 90% de cobertura de linhas/branches e também valida build e
-health check do container. O contrato HTTP é simulado nos testes; Groq e as APIs cambiais devem
-ser confirmadas pelo roteiro manual porque dependem de credenciais, rede e disponibilidade
-externa.
+A CI executa os mesmos gates, exige ao menos 90% de cobertura total com medição de branches e
+valida o build e o health check do container. Dependências são resolvidas pelo `uv.lock`; ações
+da CI usam referências imutáveis; o container executa com usuário sem privilégios.
 
-Para validar o limite de três tentativas de autenticação, informe um CPF da massa e uma data
-válida, mas incompatível, como `01/01/2000`; repita o par CPF + nascimento três vezes. Entradas
-com formato inválido são corrigidas antes da consulta e não contam como tentativa de identidade.
+### Roteiro funcional principal
+
+1. Envie “Olá” e confirme que a Triagem solicita CPF apenas depois dessa interação.
+2. Autentique-se como Diego e confirme a personalização pelo primeiro nome.
+3. Em uma nova conversa, envie “qual é meu limite?” antes de autenticar como Ana; o pedido deve
+   ser retomado sem repetição.
+4. Consulte o score e escreva “preciso de um fôlego de quatro mil no cartão”.
+5. Confirme `LLM ativa` na barra lateral e observe a decisão determinística.
+6. Peça um limite menor que o atual, confirme a redução e consulte o limite novamente.
+7. Autentique-se como Mariana, solicite aumento e conclua a entrevista em linguagem natural.
+8. Confirme a reanálise automática do pedido original.
+9. Solicite a cotação da moeda dos Estados Unidos.
+10. Recuse outro serviço e confirme o encerramento solicitado pelo assistente.
+
+Para testar CPF não cadastrado, use `12345678901` e uma data válida. Responda “não” para
+corrigir ou “sim, está correto” para receber orientação e encerrar. Para testar o limite de
+autenticação, use um CPF cadastrado e uma data incompatível, como `01/01/2000`, três vezes.
+Erros de formato são corrigidos antes da consulta e não consomem uma tentativa de identidade.
+
+Groq e provedores cambiais são confirmados manualmente porque dependem de credenciais, rede e
+disponibilidade externa; seus contratos HTTP são simulados na suíte automatizada.
+
+### Container
+
+```bash
+docker build -t banco-agil-agent .
+docker run --rm -p 8501:8501 --env-file .env banco-agil-agent
+```
 
 ## Solução de problemas
 
 **`No module named streamlit` ou `streamlit_app.py` ausente**
 
-Confirme que está na raiz correta e atualize a `main`: `git pull --ff-only origin main`. Se o
-Git bloquear arquivos não rastreados, mova a cópia local para fora do repositório antes do pull.
+Confirme que o terminal está na raiz do repositório e atualize a `main` antes de sincronizar as
+dependências. Se `VIRTUAL_ENV` apontar para outro projeto, execute `unset VIRTUAL_ENV`.
 
 **A barra mostra `fallback local`**
 
-Confirme `GROQ_API_KEY` em `.env`, reinicie o processo e não apenas a conversa. Se mostrar
-`LLM falhou`, consulte o terminal: o app registra somente tipo/status da falha, sem mensagem do
-cliente nem chave.
+Confirme `GROQ_API_KEY` no `.env` e reinicie o processo. Se mostrar `LLM falhou`, consulte o
+terminal: a aplicação registra apenas o tipo/status da falha, sem mensagem do cliente ou chave.
 
 **A cotação não retorna**
 
-Verifique acesso HTTPS a `olinda.bcb.gov.br` e `api.frankfurter.dev`. Para tempo real, adicione
-uma chave válida da AwesomeAPI em `EXCHANGE_API_KEY`. O terminal informa qual provedor falhou
-sem registrar a mensagem ou dados do cliente, e a barra lateral mostra a estratégia configurada.
+Verifique acesso HTTPS ao BCB e à Frankfurter. Para AwesomeAPI, confirme `EXCHANGE_API_KEY`.
+O terminal identifica o provedor indisponível sem registrar a mensagem ou os dados do cliente.
 
-## Limites do MVP
+## Limites e evolução para produção
 
-Este projeto é uma demonstração local, não um sistema bancário de produção. CSV e JSONL não
-oferecem transações entre instâncias, controle de acesso corporativo, retenção automatizada ou
-auditoria imutável. Produção exigiria banco transacional, cofre de segredos, idempotência,
-telemetria centralizada, revisão de segurança/LGPD e revisão humana formal para decisões de
-crédito contestadas.
+Este repositório entrega um MVP local completo, não uma plataforma bancária pronta para operar
+com dados reais. CSV e JSONL não oferecem transações multi-instância, controle de acesso
+corporativo, retenção automatizada ou auditoria imutável.
+
+Uma implantação de produção exigiria banco transacional, cofre de segredos, idempotência,
+telemetria centralizada, criptografia gerenciada, autenticação forte, políticas de acesso e
+retenção, revisão humana de decisões contestadas e validação formal de segurança, LGPD e regras
+regulatórias aplicáveis.

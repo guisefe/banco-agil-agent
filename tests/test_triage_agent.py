@@ -46,6 +46,13 @@ class StubCustomerRepository:
             return self.customer
         return None
 
+    def get_by_cpf(self, *, cpf: str) -> Customer | None:
+        if self.error is not None:
+            raise self.error
+        if self.customer is not None and self.customer.cpf == cpf:
+            return self.customer
+        return None
+
 
 def make_customer() -> Customer:
     return Customer(
@@ -146,12 +153,12 @@ def test_triage_authenticates_and_routes_credit_after_identity_confirmation() ->
 
 
 def test_triage_ends_after_third_consecutive_identity_failure() -> None:
-    agent, _, audit_writer = make_agent()
+    agent, _, audit_writer = make_agent(customer=make_customer())
     state = started_state(agent)
 
     for expected_attempt in range(1, 4):
         state = agent.respond(state, "00000000000")
-        state = agent.respond(state, "20/05/1990")
+        state = agent.respond(state, "01/01/2000")
         assert state["authentication_attempts"] == expected_attempt
 
     assert state["end_reason"] == "authentication_attempts_exceeded"
@@ -164,6 +171,40 @@ def test_triage_ends_after_third_consecutive_identity_failure() -> None:
     ) == 3
     assert audit_writer.events[-1].event_type == "conversation_ended"
     assert audit_writer.events[-1].reason_code == "AUTHENTICATION_ATTEMPTS_EXCEEDED"
+
+
+def test_triage_confirms_unregistered_cpf_and_guides_customer_after_retries() -> None:
+    agent, _, audit_writer = make_agent()
+    state = started_state(agent)
+
+    for attempt in range(1, 4):
+        state = agent.respond(state, "99999999999")
+        state = agent.respond(state, "01/01/2000")
+        assert state["authentication_attempts"] == attempt
+        if attempt < 3:
+            assert state["triage_stage"] == "confirming_unregistered_cpf"
+            assert "não localizei" in state["assistant_message"].casefold()
+            state = agent.respond(state, "não")
+
+    assert state["end_reason"] == "customer_not_registered"
+    assert "agência" in state["assistant_message"]
+    assert "Obrigado" in state["assistant_message"]
+    assert state["cpf"] is None
+    assert [event.reason_code for event in audit_writer.events[-4:]] == [
+        "CPF_NOT_REGISTERED",
+        "CPF_NOT_REGISTERED",
+        "CPF_NOT_REGISTERED",
+        "CUSTOMER_NOT_REGISTERED",
+    ]
+
+    confirmed_agent, _, _ = make_agent()
+    confirmed_state = started_state(confirmed_agent)
+    confirmed_state = confirmed_agent.respond(confirmed_state, "99999999999")
+    confirmed_state = confirmed_agent.respond(confirmed_state, "01/01/2000")
+    confirmed_state = confirmed_agent.respond(confirmed_state, "sim, está correto")
+
+    assert confirmed_state["end_reason"] == "customer_not_registered"
+    assert "agência" in confirmed_state["assistant_message"]
 
 
 def test_repository_failure_does_not_consume_customer_attempt() -> None:

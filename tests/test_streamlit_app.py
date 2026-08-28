@@ -80,6 +80,7 @@ def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:
 
     app.chat_input[0].set_value("20/05/1990").run()
     assert "**/**/1990" in app.chat_message[2].markdown[0].value
+    assert "Olá, Ana!" in app.chat_message[3].markdown[0].value
 
     app.chat_input[0].set_value("Quero consultar meu limite").run()
 

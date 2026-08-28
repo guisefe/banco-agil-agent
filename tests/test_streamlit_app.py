@@ -31,8 +31,8 @@ def test_streamlit_app_starts_triage_without_exceptions(
 
     assert not app.exception
     assert app.title[0].value == "🏦 Banco Ágil"
-    assert len(app.chat_message) == 1
-    assert "CPF" in app.chat_message[0].markdown[0].value
+    assert len(app.chat_message) == 0
+    assert app.chat_input[0].placeholder == "Envie uma mensagem para iniciar o atendimento"
     assert app.chat_input[0].disabled is False
     assert not app.warning
     assert any("fallback local" in item.value for item in app.markdown)
@@ -71,10 +71,10 @@ def test_streamlit_app_masks_identity_and_completes_credit_query() -> None:
     app = make_app_test().run()
 
     app.chat_input[0].set_value("00000000000").run()
-    assert "***.***.***-00" in app.chat_message[1].markdown[0].value
+    assert "***.***.***-00" in app.chat_message[0].markdown[0].value
 
     app.chat_input[0].set_value("20/05/1990").run()
-    assert "**/**/1990" in app.chat_message[3].markdown[0].value
+    assert "**/**/1990" in app.chat_message[2].markdown[0].value
 
     app.chat_input[0].set_value("Quero consultar meu limite").run()
 
@@ -94,21 +94,20 @@ def test_streamlit_app_can_start_new_conversation_after_end() -> None:
 
     assert not app.exception
     assert app.chat_input[0].disabled is False
-    assert len(app.chat_message) == 1
+    assert len(app.chat_message) == 0
 
 
 def test_streamlit_app_can_reset_an_active_conversation() -> None:
     app = make_app_test().run()
     app.chat_input[0].set_value("00000000000").run()
 
-    assert len(app.chat_message) == 3
+    assert len(app.chat_message) == 2
 
     app.button[0].click().run()
 
     assert not app.exception
     assert app.chat_input[0].disabled is False
-    assert len(app.chat_message) == 1
-    assert "CPF" in app.chat_message[0].markdown[0].value
+    assert len(app.chat_message) == 0
 
 
 def test_streamlit_app_blocks_after_three_identity_mismatches() -> None:

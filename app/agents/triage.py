@@ -18,7 +18,7 @@ from app.tools.conversation import (
     is_end_request,
     normalize_text,
 )
-from app.tools.identity import IdentityInputError, normalize_cpf, parse_birth_date
+from app.tools.identity import IdentityInputError, is_cpf_input, normalize_cpf, parse_birth_date
 
 MAX_AUTHENTICATION_ATTEMPTS = 3
 
@@ -44,15 +44,17 @@ class TriageAgent:
         self._pseudonymization_key = pseudonymization_key
         self._intent_interpreter = intent_interpreter or DeterministicConversationInterpreter()
 
-    def start(self, state: ConversationState) -> ConversationState:
+    def activate(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
         if state["triage_stage"] != "greeting" or state["end_reason"] is not None:
-            raise ValueError("triage can only start from the initial conversation state")
+            raise ValueError("triage can only activate from the initial conversation state")
 
         started_state = state.copy()
-        started_state["assistant_message"] = (
-            "Olá! Sou o assistente do Banco Ágil. Para começar, informe seu CPF."
-        )
-        started_state["triage_stage"] = "awaiting_cpf"
+        started_state["turn_number"] += 1
+        started_state["user_message"] = user_message
         self._append_event(
             AuditEvent(
                 event_type="conversation_started",
@@ -62,7 +64,12 @@ class TriageAgent:
                 outcome="success",
             )
         )
-        return started_state
+        if is_end_request(user_message):
+            return self._finish_by_user_request(started_state)
+        if is_cpf_input(user_message):
+            started_state["triage_stage"] = "awaiting_cpf"
+            return self._collect_cpf(started_state, user_message)
+        return self._capture_service_request(started_state, user_message, first_turn=True)
 
     def respond(self, state: ConversationState, user_message: str) -> ConversationState:
         self._ensure_triage_can_respond(state)
@@ -74,6 +81,17 @@ class TriageAgent:
         if is_end_request(user_message):
             return self._finish_by_user_request(next_state)
 
+        if state["triage_stage"] == "awaiting_service":
+            if _is_negative_response(user_message):
+                next_state["triage_stage"] = "awaiting_end_confirmation"
+                next_state["assistant_message"] = (
+                    "Tudo bem. Posso finalizar seu atendimento por aqui?"
+                )
+                return next_state
+            if is_cpf_input(user_message):
+                next_state["triage_stage"] = "awaiting_cpf"
+                return self._collect_cpf(next_state, user_message)
+            return self._capture_service_request(next_state, user_message)
         if state["triage_stage"] == "awaiting_cpf":
             return self._collect_cpf(next_state, user_message)
         if state["triage_stage"] == "awaiting_birth_date":
@@ -90,6 +108,40 @@ class TriageAgent:
             return self._confirm_end(next_state, user_message)
 
         raise ValueError("triage is not ready to receive a user message")
+
+    def _capture_service_request(
+        self,
+        state: ConversationState,
+        user_message: str,
+        *,
+        first_turn: bool = False,
+    ) -> ConversationState:
+        interpretation = self._intent_interpreter.interpret(user_message)
+        state["last_interpretation_source"] = interpretation.source
+        self._record_intent_interpretation(state, interpretation)
+        destination = _destination_for(interpretation.intent)
+        if destination is None:
+            state["interpreted_intent"] = None
+            state["interpreted_currency"] = None
+            state["interpreted_requested_limit"] = None
+            state["triage_stage"] = "awaiting_service"
+            prefix = "Olá! Sou o assistente do Banco Ágil. " if first_turn else ""
+            state["assistant_message"] = (
+                f"{prefix}Como posso ajudar? Posso consultar ou ajustar seu limite, "
+                "informar seu score, realizar uma entrevista financeira ou consultar "
+                "a cotação de moedas."
+            )
+            return state
+
+        state["interpreted_intent"] = interpretation.intent
+        state["interpreted_currency"] = interpretation.currency
+        state["interpreted_requested_limit"] = interpretation.requested_limit
+        state["triage_stage"] = "awaiting_cpf"
+        state["assistant_message"] = (
+            f"{_service_acknowledgement(destination)} Antes de continuar, preciso confirmar "
+            "sua identidade. Informe seu CPF."
+        )
+        return state
 
     def _collect_cpf(
         self,
@@ -172,6 +224,34 @@ class TriageAgent:
                 outcome="success",
                 reason_code="IDENTITY_CONFIRMED",
                 subject_ref=subject_ref,
+            )
+        )
+        if state["interpreted_intent"] is not None:
+            return self._handoff_interpreted_request(state)
+        return state
+
+    def _handoff_interpreted_request(
+        self,
+        state: ConversationState,
+    ) -> ConversationState:
+        interpreted_intent = state["interpreted_intent"]
+        if interpreted_intent is None:
+            return state
+        destination = _destination_for(interpreted_intent)
+        if destination is None:
+            return state
+        state["active_agent"] = destination
+        state["handoff_pending"] = True
+        state["assistant_message"] = _handoff_message(destination)
+        self._append_event(
+            AuditEvent(
+                event_type="agent_handoff",
+                conversation_id=state["conversation_id"],
+                turn_number=state["turn_number"],
+                agent="triage",
+                outcome="success",
+                reason_code=f"ROUTED_TO_{destination.upper()}",
+                subject_ref=self._subject_ref(state),
             )
         )
         return state
@@ -320,7 +400,9 @@ class TriageAgent:
         if _is_affirmative_response(user_message):
             return self._finish_by_user_request(state)
         if _is_negative_response(user_message):
-            state["triage_stage"] = "awaiting_intent"
+            state["triage_stage"] = (
+                "awaiting_intent" if state["authenticated"] else "awaiting_service"
+            )
             state["assistant_message"] = "Tudo bem! Como posso ajudar você agora?"
             return state
         state["assistant_message"] = (
@@ -365,6 +447,15 @@ def _handoff_message(destination: DestinationAgent) -> str:
         "credit": "Certo. Vamos consultar ou revisar seu limite de crédito.",
         "interview": ("Certo. Vamos iniciar sua entrevista financeira. Qual é sua renda mensal?"),
         "exchange": "Certo. Qual moeda você deseja consultar?",
+    }
+    return messages[destination]
+
+
+def _service_acknowledgement(destination: DestinationAgent) -> str:
+    messages: Mapping[DestinationAgent, str] = {
+        "credit": "Entendi que você precisa de ajuda com crédito.",
+        "interview": "Entendi que você deseja realizar a entrevista financeira.",
+        "exchange": "Entendi que você deseja consultar uma cotação.",
     }
     return messages[destination]
 

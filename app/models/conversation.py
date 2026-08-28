@@ -14,6 +14,7 @@ AgentName = Literal[
 
 TriageStage = Literal[
     "greeting",
+    "awaiting_service",
     "awaiting_cpf",
     "awaiting_birth_date",
     "awaiting_intent",

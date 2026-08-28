@@ -14,6 +14,14 @@ def normalize_cpf(value: str) -> str:
     return digits
 
 
+def is_cpf_input(value: str) -> bool:
+    try:
+        normalize_cpf(value)
+    except IdentityInputError:
+        return False
+    return True
+
+
 def parse_birth_date(value: str, *, today: date | None = None) -> date:
     normalized_value = value.strip()
     parsed_date: date | None = None

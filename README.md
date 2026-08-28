@@ -55,8 +55,8 @@ A barra lateral informa o que aconteceu no último turno:
 | Ana Martins | `00000000000` | `20/05/1990` | Consultar score/limite e testar aumento ou redução. |
 | Mariana Souza | `22222222222` | `14/02/1995` | Testar cliente sem score e entrevista. |
 | João Pereira | `33333333333` | `08/09/1978` | Exercitar score baixo e possível rejeição. |
-| Fernanda Alves | `66666666666` | `30/06/1975` | Validar a fronteira superior da primeira faixa (`299`). |
 | Rafael Lima | `77777777777` | `11/07/1992` | Validar a fronteira inicial da segunda faixa (`300`). |
+| Diego Nascimento | `99999999999` | `05/01/2002` | Validar personalização e score máximo (`1000`). |
 
 Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 
@@ -222,11 +222,11 @@ busca geral; APIs cambiais têm contrato menor e mais simples de validar.
 | `data/score_limite.csv` | Faixas de score e limite máximo. |
 | `data/solicitacoes_aumento_limite.csv` | Histórico de solicitações e resultado. |
 
-`clientes.csv` inclui perfis sintéticos sem score, com score mínimo, máximo e valores de
-fronteira. `score_limite.csv` não recebe linhas extras porque suas cinco faixas já particionam
-todo o intervalo de 0 a 1000 sem lacunas ou sobreposição. O CSV de solicitações começa vazio,
-somente com cabeçalho, pois é uma saída produzida pelo sistema e não uma massa de entrada.
-Os nomes dos três arquivos permanecem os definidos no desafio.
+`clientes.csv` mantém cinco perfis sintéticos: sem score, score baixo, fronteira de faixa, uso
+regular e score máximo. `score_limite.csv` não recebe linhas extras porque suas cinco faixas já
+particionam todo o intervalo de 0 a 1000 sem lacunas ou sobreposição. O CSV de solicitações
+começa vazio, somente com cabeçalho, pois é uma saída produzida pelo sistema e não uma massa de
+entrada. Os nomes dos três arquivos permanecem os definidos no desafio.
 
 A trilha JSONL registra evento, resultado, motivo e versão da política. Não copia CPF,
 nascimento, score, renda, valores ou conversa completa. HMAC pseudonimiza a referência do

@@ -304,6 +304,39 @@ def test_workflow_rejects_message_after_end() -> None:
         workflow.respond(state, "oi")
 
 
+def test_workflow_confirms_end_when_customer_declines_more_help() -> None:
+    workflow = make_workflow()
+    state = workflow.start()
+    state = workflow.respond(state, "00000000000")
+    state = workflow.respond(state, "20/05/1990")
+    state = workflow.respond(state, "quero saber meu limite")
+
+    state = workflow.respond(state, "não")
+
+    assert state["end_reason"] is None
+    assert state["triage_stage"] == "awaiting_end_confirmation"
+    assert "finalizar" in state["assistant_message"]
+
+    state = workflow.respond(state, "sim, pode")
+
+    assert state["end_reason"] == "user_requested"
+    assert "Tenha um ótimo dia" in state["assistant_message"]
+
+
+def test_workflow_continues_when_customer_rejects_end_confirmation() -> None:
+    workflow = make_workflow()
+    state = workflow.start()
+    state = workflow.respond(state, "00000000000")
+    state = workflow.respond(state, "20/05/1990")
+    state = workflow.respond(state, "não")
+
+    state = workflow.respond(state, "não")
+
+    assert state["end_reason"] is None
+    assert state["triage_stage"] == "awaiting_intent"
+    assert "Como posso ajudar" in state["assistant_message"]
+
+
 def test_workflow_allows_global_end_request_after_credit_handoff() -> None:
     workflow = make_workflow()
     state = workflow.start()

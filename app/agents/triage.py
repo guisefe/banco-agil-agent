@@ -12,7 +12,12 @@ from app.services.understanding import (
     DeterministicConversationInterpreter,
     IntentInterpreter,
 )
-from app.tools.conversation import end_conversation, is_end_request
+from app.tools.conversation import (
+    USER_REQUESTED_END_MESSAGE,
+    end_conversation,
+    is_end_request,
+    normalize_text,
+)
 from app.tools.identity import IdentityInputError, normalize_cpf, parse_birth_date
 
 MAX_AUTHENTICATION_ATTEMPTS = 3
@@ -74,7 +79,15 @@ class TriageAgent:
         if state["triage_stage"] == "awaiting_birth_date":
             return self._authenticate(next_state, user_message)
         if state["triage_stage"] == "awaiting_intent":
+            if _is_negative_response(user_message):
+                next_state["triage_stage"] = "awaiting_end_confirmation"
+                next_state["assistant_message"] = (
+                    "Entendi. Posso finalizar seu atendimento por aqui?"
+                )
+                return next_state
             return self._route_intent(next_state, user_message)
+        if state["triage_stage"] == "awaiting_end_confirmation":
+            return self._confirm_end(next_state, user_message)
 
         raise ValueError("triage is not ready to receive a user message")
 
@@ -283,7 +296,7 @@ class TriageAgent:
         ended_state = end_conversation(
             state,
             reason="user_requested",
-            assistant_message="Atendimento encerrado. Obrigado por falar com o Banco Ágil!",
+            assistant_message=USER_REQUESTED_END_MESSAGE,
         )
         self._append_event(
             AuditEvent(
@@ -297,6 +310,22 @@ class TriageAgent:
             )
         )
         return ended_state
+
+    def _confirm_end(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
+        if _is_affirmative_response(user_message):
+            return self._finish_by_user_request(state)
+        if _is_negative_response(user_message):
+            state["triage_stage"] = "awaiting_intent"
+            state["assistant_message"] = "Tudo bem! Como posso ajudar você agora?"
+            return state
+        state["assistant_message"] = (
+            "Só para confirmar: responda sim para finalizar ou não para continuar o atendimento."
+        )
+        return state
 
     def _subject_ref(self, state: ConversationState) -> str | None:
         cpf = state["cpf"]
@@ -337,3 +366,28 @@ def _handoff_message(destination: DestinationAgent) -> str:
         "exchange": "Certo. Qual moeda você deseja consultar?",
     }
     return messages[destination]
+
+
+def _is_affirmative_response(message: str) -> bool:
+    return _normalized_confirmation(message) in {
+        "sim",
+        "sim pode",
+        "pode",
+        "pode encerrar",
+        "claro",
+        "por favor",
+    }
+
+
+def _is_negative_response(message: str) -> bool:
+    return _normalized_confirmation(message) in {
+        "nao",
+        "nao quero",
+        "nao pode",
+        "ainda nao",
+        "quero continuar",
+    }
+
+
+def _normalized_confirmation(message: str) -> str:
+    return normalize_text(message).translate(str.maketrans("", "", ".,!?"))

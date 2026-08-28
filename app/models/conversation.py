@@ -17,6 +17,7 @@ TriageStage = Literal[
     "awaiting_cpf",
     "awaiting_birth_date",
     "awaiting_intent",
+    "awaiting_end_confirmation",
 ]
 
 CreditStage = Literal[

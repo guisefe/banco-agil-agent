@@ -170,13 +170,16 @@ def test_workflow_runs_exchange_quote_and_returns_to_triage() -> None:
 
     assert state["authenticated"] is False
     assert state["active_agent"] == "triage"
-    assert state["interpreted_intent"] == "exchange_quote"
+    assert state["interpreted_intent"] is None
+    assert state["last_interpretation_source"] is None
+    assert state["pending_initial_request"] == "quero saber a cotação do dólar"
     assert "CPF" in state["assistant_message"]
 
     state = workflow.respond(state, "00000000000")
     state = workflow.respond(state, "20/05/1990")
 
     assert state["active_agent"] == "triage"
+    assert state["pending_initial_request"] is None
     assert "Cotação de USD" in state["assistant_message"]
 
 

@@ -48,6 +48,7 @@ def end_conversation(
     ended_state["customer_name"] = None
     ended_state["requested_credit_limit"] = None
     ended_state["pending_credit_requested_at"] = None
+    ended_state["pending_initial_request"] = None
     ended_state["handoff_pending"] = False
     ended_state["interpreted_intent"] = None
     ended_state["interpreted_currency"] = None

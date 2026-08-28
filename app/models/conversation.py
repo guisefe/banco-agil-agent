@@ -14,7 +14,6 @@ AgentName = Literal[
 
 TriageStage = Literal[
     "greeting",
-    "awaiting_service",
     "awaiting_cpf",
     "awaiting_birth_date",
     "awaiting_intent",
@@ -63,6 +62,7 @@ class ConversationState(TypedDict):
     credit_stage: CreditStage
     requested_credit_limit: Decimal | None
     pending_credit_requested_at: str | None
+    pending_initial_request: str | None
     handoff_pending: bool
     interpreted_intent: IntentName | None
     interpreted_currency: SupportedCurrency | None
@@ -95,6 +95,7 @@ def initial_state() -> ConversationState:
         "credit_stage": "awaiting_action",
         "requested_credit_limit": None,
         "pending_credit_requested_at": None,
+        "pending_initial_request": None,
         "handoff_pending": False,
         "interpreted_intent": None,
         "interpreted_currency": None,

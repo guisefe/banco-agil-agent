@@ -9,7 +9,7 @@ def safe_user_message_for_display(
 ) -> str:
     if is_end_request(user_message):
         return user_message
-    if state["triage_stage"] in {"greeting", "awaiting_service"} and is_cpf_input(user_message):
+    if state["triage_stage"] == "greeting" and is_cpf_input(user_message):
         return f"CPF informado: {_partially_mask_cpf(user_message)}"
     if state["triage_stage"] == "awaiting_cpf":
         return f"CPF informado: {_partially_mask_cpf(user_message)}"

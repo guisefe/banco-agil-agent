@@ -62,7 +62,7 @@ Os identificadores são fixtures sintéticas do desafio, não CPFs reais.
 
 ### Roteiro manual principal
 
-1. Abra o chat e envie “Olá”; confirme que o assistente só então apresenta suas capacidades.
+1. Abra o chat e envie “Olá”; confirme que o assistente só então saúda e solicita o CPF.
 2. Em uma nova conversa, envie diretamente “qual é meu limite?”; autentique-se como Ana e
    confirme que o pedido é retomado sem precisar ser repetido.
 3. Pergunte “qual é meu score?” e escreva “preciso de um fôlego de quatro mil no cartão”.
@@ -81,7 +81,7 @@ Crédito altera os CSVs. Faça uma cópia de `data/` antes de repetir a demonstr
 
 | Agente | Responsabilidade |
 | --- | --- |
-| Triagem | Ativa a conversa após a primeira mensagem, identifica o pedido e autentica por CPF + nascimento em até três tentativas. |
+| Triagem | Ativa a conversa após a primeira mensagem, autentica por CPF + nascimento em até três tentativas e só então identifica o pedido. |
 | Crédito | Consulta score/limite, decide aumentos pela política e confirma reduções solicitadas. |
 | Entrevista | Coleta cinco dados financeiros, recalcula o score e retorna para reanálise. |
 | Câmbio | Consulta USD, EUR, ARS, GBP ou JPY e retorna à Triagem. |
@@ -93,14 +93,15 @@ bancário é acessado antes da autenticação.
 
 O chat abre sem uma fala automática. A primeira mensagem do usuário ativa a sessão:
 
-- “Olá” recebe uma apresentação curta, as capacidades e “Como posso ajudar?”;
-- um pedido direto, como “qual é a cotação do dólar?”, é interpretado e preservado;
-- CPF e nascimento são solicitados somente depois que existe um serviço a continuar;
-- após a autenticação, o LangGraph retoma o pedido original e faz o handoff interno.
+- “Olá” recebe uma saudação curta e o pedido de CPF;
+- um pedido direto, como “qual é a cotação do dólar?”, é guardado sem classificação;
+- CPF e nascimento são coletados e validados antes de qualquer interpretação de assunto;
+- após a autenticação, a LLM ou o fallback interpreta o pedido guardado e o LangGraph faz o
+  handoff interno.
 
-Essa ordem evita começar a conversa com uma instrução abrupta, reduz coleta antecipada de dados
-e mantém a exigência do desafio: interpretar não é executar; nenhum agente especializado é
-acionado antes da autenticação.
+Essa ordem evita uma mensagem não solicitada na abertura e segue literalmente o desafio:
+saudação, CPF, nascimento, autenticação, identificação do assunto e redirecionamento. Nenhum
+agente especializado nem a LLM de entendimento é acionado antes da autenticação.
 
 ## Arquitetura
 
@@ -128,9 +129,9 @@ testar o fluxo sem depender da rede nem misturar decisão bancária com geraçã
 
 ### Participação da LLM
 
-A Groq recebe apenas a mensagem do turno atual. Na abertura, ela pode identificar o serviço
-antes da autenticação para evitar que o cliente repita o pedido; isso não autoriza handoff nem
-operação bancária. Depois, ela também é usada para:
+A Groq recebe somente a mensagem do assunto depois da autenticação. Se o usuário já informou o
+pedido na primeira mensagem, o texto é mantido temporariamente sem classificação e enviado ao
+entendimento apenas quando a identidade for confirmada. A LLM é usada para:
 
 - classificar intenção dentro de uma lista fechada;
 - extrair moeda e o novo limite total desejado;
@@ -182,7 +183,7 @@ juntos.
 | LangGraph | Autenticação, handoffs, encerramento global e o ciclo Entrevista → Crédito formam uma máquina de estados explícita. | Mais estrutura que condicionais simples, em troca de transições visíveis e testáveis. |
 | Groq | Baixa latência, JSON Schema no modelo escolhido e endpoint compatível com OpenAI. | Dependência de rede e fornecedor, mitigada por configuração e fallback local. |
 | Interpretação híbrida | A LLM entende linguagem livre; Python e CSV preservam autenticação, score e decisão reproduzíveis. | O fallback entende menos variações, mas o fluxo crítico continua disponível. |
-| Início reativo | A sessão só começa após uma mensagem; a intenção é guardada e retomada depois da autenticação. | Acrescenta um estado de pré-autenticação, em troca de uma abertura natural e menor coleta antecipada. |
+| Início reativo | A sessão só começa após uma mensagem; o texto inicial pode ser guardado, mas só é interpretado depois da autenticação. | Acrescenta um campo temporário ao estado, em troca de evitar repetição sem inverter a ordem do PDF. |
 | AwesomeAPI + BCB + Frankfurter | Combina tempo real opcional, referência brasileira oficial e uma fonte diária sem chave. | As fontes podem divergir; por isso a resposta identifica compra/venda ou taxa de referência. |
 | Repositórios sobre CSV | O PDF exige os arquivos e o domínio não deve depender de leitura direta. | CSV não é banco transacional; escrita atômica, lock e compensação são limites do MVP. |
 | Streamlit | É requisito da entrega e demonstra todo o atendimento com pouca infraestrutura. | Sessão local e execução em processo único, suficientes apenas para demonstração. |
@@ -204,7 +205,7 @@ busca geral; APIs cambiais têm contrato menor e mais simples de validar.
 | “Nova conversa” não reiniciava uma sessão ativa no navegador | O teste cobria apenas conversas já encerradas e o rerun era controlado manualmente. | Callback de sessão do Streamlit e teste específico durante conversa ativa. |
 | `não` após um serviço era tratado como intenção desconhecida | O fluxo não distinguia recusa de outro serviço da confirmação de encerramento. | Estado `awaiting_end_confirmation`, confirmação em duas etapas e despedida mais humana, funcionando sem LLM. |
 | Um valor menor era rejeitado como “aumento inválido” | A operação estava modelada somente como aumento. | A ação passou a ser “ajustar limite”: aumentos seguem a política; reduções exigem confirmação e auditoria próprias. |
-| O chat abria pedindo CPF sem interação | A criação da tela já executava o primeiro nó do grafo. | A UI agora abre vazia; a primeira mensagem registra o início, identifica o serviço e só então solicita autenticação. |
+| O chat abria pedindo CPF sem interação | A criação da tela já executava o primeiro nó do grafo. | A UI abre vazia; a primeira mensagem registra o início e recebe uma saudação com pedido de CPF. O assunto só é interpretado após autenticação. |
 | Aprovação envolve cliente e histórico em arquivos diferentes | CSV não oferece transação entre arquivos. | Substituição atômica, seção crítica e compensação quando o segundo registro falha. |
 
 ## Dados e auditoria

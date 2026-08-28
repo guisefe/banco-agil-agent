@@ -37,6 +37,11 @@ def test_streamlit_app_starts_triage_without_exceptions(
     assert not app.warning
     assert any("fallback local" in item.value for item in app.markdown)
 
+    app.chat_input[0].set_value("Olá").run()
+
+    assert "CPF" in app.chat_message[-1].markdown[0].value
+    assert app.chat_input[0].placeholder == "Digite sua mensagem"
+
 
 def test_streamlit_app_shows_when_llm_mode_is_enabled(
     monkeypatch: pytest.MonkeyPatch,

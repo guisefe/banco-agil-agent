@@ -55,8 +55,13 @@ def render_app() -> None:
     if state["end_reason"] is not None:
         st.success("Conversa finalizada. Inicie uma nova conversa para continuar.")
 
+    input_placeholder = (
+        "Envie uma mensagem para iniciar o atendimento"
+        if state["triage_stage"] == "greeting"
+        else "Digite sua mensagem"
+    )
     user_message = st.chat_input(
-        "Envie uma mensagem para iniciar o atendimento",
+        input_placeholder,
         disabled=not can_receive_message,
     )
     if user_message:

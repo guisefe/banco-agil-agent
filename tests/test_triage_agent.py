@@ -88,15 +88,16 @@ def test_triage_activates_after_user_greeting_and_records_audit_event() -> None:
 
     state = started_state(agent)
 
-    assert state["triage_stage"] == "awaiting_service"
-    assert "Como posso ajudar" in state["assistant_message"]
+    assert state["triage_stage"] == "awaiting_cpf"
+    assert "CPF" in state["assistant_message"]
+    assert state["pending_initial_request"] == "Olá"
+    assert state["last_interpretation_source"] is None
     assert audit_writer.events[0].event_type == "conversation_started"
 
 
 def test_triage_rejects_invalid_cpf_without_consuming_attempt() -> None:
     agent, repository, _ = make_agent()
     state = started_state(agent)
-    state = agent.respond(state, "Quero consultar meu limite")
 
     state = agent.respond(state, "123")
 

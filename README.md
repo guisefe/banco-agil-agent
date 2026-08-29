@@ -91,20 +91,20 @@ mesma demonstração desde o estado inicial.
 
 ```mermaid
 flowchart TD
-    UI[Streamlit] --> G[LangGraph]
-    G --> T[Triagem]
-    G --> C[Crédito]
-    G --> E[Entrevista]
-    G --> X[Câmbio]
-    T --> U[Entendimento híbrido]
-    C --> U
-    E --> U
-    X --> U
-    U --> L[Groq]
-    U --> F[Fallback local]
-    C --> CSV[(CSVs)]
-    E --> CSV
-    X --> API[AwesomeAPI / BCB / Frankfurter]
+    UI["Streamlit"] --> GRAPH["LangGraph"]
+    GRAPH --> TRIAGE["Triagem"]
+    GRAPH --> CREDIT["Crédito"]
+    GRAPH --> INTERVIEW["Entrevista"]
+    GRAPH --> EXCHANGE["Câmbio"]
+    TRIAGE --> UNDERSTANDING["Entendimento híbrido"]
+    CREDIT --> UNDERSTANDING
+    INTERVIEW --> UNDERSTANDING
+    EXCHANGE --> UNDERSTANDING
+    UNDERSTANDING --> GROQ["Groq"]
+    UNDERSTANDING --> FALLBACK["Fallback local"]
+    CREDIT --> DATA[("CSVs")]
+    INTERVIEW --> DATA
+    EXCHANGE --> PROVIDERS["AwesomeAPI, BCB e Frankfurter"]
 ```
 
 O grafo mantém o estado da sessão, controla transições e encerra qualquer fluxo de forma

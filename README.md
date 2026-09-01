@@ -15,6 +15,20 @@ controlam autenticação, score, decisões de crédito, persistência e auditori
 > **A LLM entende a mensagem; o domínio toma a decisão.** Nenhuma aprovação, autenticação ou
 > atualização financeira depende de texto gerado pelo modelo.
 
+## Engineering evidence at a glance
+
+This is a deliberately bounded AI system: the model helps interpret language, while sensitive banking decisions remain deterministic, auditable and testable.
+
+| Engineering concern | Evidence in the implementation |
+| --- | --- |
+| **Controlled agent orchestration** | Typed LangGraph state, four specialized agents and explicit handoff rules. |
+| **Identity and privacy** | CPF + birth-date authentication, limited retries, synthetic data and pseudonymized audit events. |
+| **Deterministic business decisions** | Credit score, eligibility, limits and persistence are controlled by Python policies—not model output. |
+| **Resilient AI integration** | JSON Schema validation, timeout/retry handling and deterministic fallback when Groq is unavailable. |
+| **Delivery discipline** | Strict MyPy, Ruff, coverage gate, container validation and GitHub Actions CI. |
+
+The core engineering decision is simple: **an LLM may classify intent, but it must never approve credit, authenticate a customer or alter financial data.**
+
 ## Visão geral
 
 O projeto implementa um atendimento completo do primeiro contato ao encerramento, preservando

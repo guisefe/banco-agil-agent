@@ -4,6 +4,7 @@ from decimal import Decimal
 from threading import Lock
 from typing import Literal
 
+from app.application.credit import ProcessCreditIncrease
 from app.audit.events import AuditEvent
 from app.audit.privacy import MIN_PSEUDONYMIZATION_KEY_BYTES, pseudonymize_subject
 from app.audit.writer import AuditWriteError, AuditWriter
@@ -70,7 +71,12 @@ class CreditAgent:
                 f"pseudonymization key must contain at least {MIN_PSEUDONYMIZATION_KEY_BYTES} bytes"
             )
         self._customers = customer_repository
-        self._score_policy = score_policy_repository
+        self._process_increase = ProcessCreditIncrease(
+            customers=customer_repository,
+            requests=request_repository,
+            policy=score_policy_repository,
+            audit=audit_writer,
+        )
         self._requests = request_repository
         self._audit_writer = audit_writer
         self._pseudonymization_key = pseudonymization_key
@@ -254,12 +260,6 @@ class CreditAgent:
             )
 
         try:
-            maximum_limit = self._score_policy.maximum_limit_for(score=customer.credit_score)
-        except CreditRepositoryError:
-            return self._repository_failure(state)
-
-        approved = requested_limit <= maximum_limit
-        try:
             pending_requested_at = self._pending_requested_at(state) if reanalysis else None
         except CreditRepositoryError:
             return self._repository_failure(state)
@@ -268,24 +268,21 @@ class CreditAgent:
             requested_at=pending_requested_at or datetime.now(UTC),
             current_limit=customer.credit_limit,
             requested_limit=requested_limit,
-            status="aprovado" if approved else "rejeitado",
+            status="pendente",
         )
         try:
-            self._audit_decision(state, approved=approved)
-            if approved:
-                self._persist_approved_request(
-                    request,
-                    finalize_pending=pending_requested_at is not None,
-                )
-            else:
-                self._persist_rejected_request(
-                    request,
-                    finalize_pending=pending_requested_at is not None,
-                )
+            decision = self._process_increase.execute(
+                request,
+                score=customer.credit_score,
+                conversation_id=state["conversation_id"],
+                turn_number=state["turn_number"],
+                subject_ref=self._subject_ref(state),
+                finalize_pending=pending_requested_at is not None,
+            )
         except (AuditWriteError, CreditRepositoryError, CustomerRepositoryError):
             return self._repository_failure(state)
 
-        if approved:
+        if decision.approved:
             state["requested_credit_limit"] = None
             state["pending_credit_requested_at"] = None
             state["assistant_message"] = (
@@ -393,47 +390,6 @@ class CreditAgent:
             reason_code="CREDIT_LIMIT_REDUCED",
             tolerate_audit_failure=True,
         )
-
-    def _persist_approved_request(
-        self,
-        request: CreditRequest,
-        *,
-        finalize_pending: bool,
-    ) -> None:
-        self._customers.update_credit_limit(
-            cpf=request.customer_cpf,
-            credit_limit=request.requested_limit,
-        )
-        try:
-            if finalize_pending:
-                self._requests.finalize_pending(
-                    customer_cpf=request.customer_cpf,
-                    requested_at=request.requested_at,
-                    status="aprovado",
-                )
-            else:
-                self._requests.append(request)
-        except CreditRepositoryError:
-            self._customers.update_credit_limit(
-                cpf=request.customer_cpf,
-                credit_limit=request.current_limit,
-            )
-            raise
-
-    def _persist_rejected_request(
-        self,
-        request: CreditRequest,
-        *,
-        finalize_pending: bool,
-    ) -> None:
-        if finalize_pending:
-            self._requests.finalize_pending(
-                customer_cpf=request.customer_cpf,
-                requested_at=request.requested_at,
-                status="rejeitado",
-            )
-        else:
-            self._requests.append(request)
 
     def _handle_interview_offer(
         self,
@@ -545,20 +501,6 @@ class CreditAgent:
             return self._customers.get_by_cpf(cpf=cpf)
         except CustomerRepositoryError:
             return None
-
-    def _audit_decision(self, state: ConversationState, *, approved: bool) -> None:
-        self._audit_writer.append(
-            AuditEvent(
-                event_type="credit_decision_made",
-                conversation_id=state["conversation_id"],
-                turn_number=state["turn_number"],
-                agent="credit",
-                outcome="approved" if approved else "rejected",
-                reason_code="WITHIN_SCORE_LIMIT" if approved else "EXCEEDS_SCORE_LIMIT",
-                subject_ref=self._subject_ref(state),
-                policy_version=SCORE_POLICY_VERSION,
-            )
-        )
 
     def _audit_handoff(self, state: ConversationState, *, reason_code: str) -> None:
         self._audit_writer.append(

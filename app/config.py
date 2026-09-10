@@ -87,12 +87,16 @@ def load_settings(
     exchange_api_key = raw_exchange_api_key.strip() if raw_exchange_api_key else None
     exchange_api_key = exchange_api_key or None
 
+    data_directory = Path(source_environment.get("BANKING_DATA_DIR", str(resolved_root / "data")))
+    if not data_directory.is_absolute():
+        data_directory = resolved_root / data_directory
+
     return Settings(
         project_root=resolved_root,
-        customer_file=resolved_root / "data" / "clientes.csv",
-        score_policy_file=resolved_root / "data" / "score_limite.csv",
-        credit_request_file=resolved_root / "data" / "solicitacoes_aumento_limite.csv",
-        audit_file=resolved_root / "data" / "audit_events.jsonl",
+        customer_file=data_directory / "clientes.csv",
+        score_policy_file=data_directory / "score_limite.csv",
+        credit_request_file=data_directory / "solicitacoes_aumento_limite.csv",
+        audit_file=data_directory / "audit_events.jsonl",
         exchange_api_key=exchange_api_key,
         pseudonymization_key=pseudonymization_key,
         uses_ephemeral_audit_key=uses_ephemeral_key,

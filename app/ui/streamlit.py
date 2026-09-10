@@ -23,7 +23,7 @@ def render_app() -> None:
         layout="centered",
     )
     st.title("🏦 Banco Ágil")
-    st.caption("Atendimento bancário inteligente e seguro")
+    st.caption("Demonstração de atendimento • use apenas dados fictícios")
 
     application = _get_application()
     state, messages = _get_or_start_conversation(application)

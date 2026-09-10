@@ -116,3 +116,13 @@ def test_settings_reject_short_configured_key(tmp_path: Path) -> None:
             project_root=tmp_path,
             environment={AUDIT_KEY_ENVIRONMENT_VARIABLE: "short"},
         )
+
+
+def test_settings_can_isolate_demo_data(tmp_path: Path) -> None:
+    settings = load_settings(
+        project_root=tmp_path,
+        environment={"BANKING_DATA_DIR": "isolated-demo"},
+    )
+    assert settings.customer_file == tmp_path / "isolated-demo/clientes.csv"
+    assert settings.audit_file == tmp_path / "isolated-demo/audit_events.jsonl"
+    assert settings.project_root == tmp_path

@@ -33,7 +33,7 @@ class ScorePolicyRepository(Protocol):
 
 class CreditRequestRepository(Protocol):
     def append(self, request: CreditRequest) -> None:
-        """Persist one final credit request using the challenge schema."""
+        """Persist one final credit request using the versioned CSV schema."""
 
     def finalize_pending(
         self,

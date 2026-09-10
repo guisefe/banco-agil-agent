@@ -1,0 +1,1203 @@
+{
+  "schema_version": 1,
+  "dataset_version": "pt-br-v1",
+  "dataset_sha256": "99a3eced2c8807973779caac11b059f70c4219720a50d0756197b690a6f29e16",
+  "commit": "d37cd05553e0a4fbcf5504d2ffb9fcbe515eb98b",
+  "git_tree": "fd79c7dc91d20a32e66db6c7c18ad623aa3d0a6b",
+  "source_sha256": "e817c4ded3732f2d3ac1b3d6a1ee219674bb22b354492a83783c0d482ab18be3",
+  "working_tree_dirty": true,
+  "measured_at": "2026-09-10T05:09:24.260721+00:00",
+  "mode": "local",
+  "model": null,
+  "cost_usd": 0,
+  "cost_note": "Local mode has no API cost. Live billing is not inferred from tokens.",
+  "limitations": "Development cases; not task completion or held-out accuracy.",
+  "summary": {
+    "cases": 50,
+    "exact_matches": 43,
+    "exact_match_rate": 0.86,
+    "intent_label_accuracy": 0.9,
+    "field_exact_match_rate": 0.9,
+    "unknown_precision": 0.7857142857142857,
+    "unknown_recall": 1.0,
+    "errors": 0,
+    "fallbacks": 0,
+    "latency_ms_p50": 0.025,
+    "latency_ms_p95": 0.114,
+    "http_requests": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "by_category": {
+      "adversarial": {
+        "cases": 2,
+        "exact_matches": 2
+      },
+      "ambiguous": {
+        "cases": 6,
+        "exact_matches": 6
+      },
+      "clear": {
+        "cases": 20,
+        "exact_matches": 20
+      },
+      "conditional": {
+        "cases": 1,
+        "exact_matches": 1
+      },
+      "contradiction": {
+        "cases": 1,
+        "exact_matches": 1
+      },
+      "hypothetical": {
+        "cases": 1,
+        "exact_matches": 1
+      },
+      "invalid": {
+        "cases": 1,
+        "exact_matches": 1
+      },
+      "negation": {
+        "cases": 2,
+        "exact_matches": 2
+      },
+      "numeric": {
+        "cases": 5,
+        "exact_matches": 5
+      },
+      "out_of_scope": {
+        "cases": 3,
+        "exact_matches": 3
+      },
+      "paraphrase": {
+        "cases": 7,
+        "exact_matches": 0
+      },
+      "unsupported": {
+        "cases": 1,
+        "exact_matches": 1
+      }
+    }
+  },
+  "results": [
+    {
+      "case": {
+        "id": "intent-01",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_limit_query",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_query",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.40258000001358596,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-02",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_score_query",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_score_query",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.044278999894231674,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-03",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_menu",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_menu",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03581499993288162,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-04",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_interview",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_interview",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03515000003062596,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-05",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_interview",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_interview",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.08465599989904149,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-06",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_adjustment",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.09377900005347328,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-07",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_adjustment",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03529700006765779,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-08",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": "4000.00"
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_adjustment",
+        "currency": null,
+        "requested_limit": "4000.00"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.11393099998713296,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-09",
+        "kind": "intent",
+        "category": "numeric",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": "1500.50"
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_adjustment",
+        "currency": null,
+        "requested_limit": "1500.50"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.048037000055956014,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-10",
+        "kind": "intent",
+        "category": "paraphrase",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": "6000.00"
+        }
+      },
+      "actual": {
+        "intent": "credit_limit_adjustment",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03404999995382241,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "intent-11",
+        "kind": "intent",
+        "category": "paraphrase",
+        "expected": {
+          "intent": "credit_limit_adjustment",
+          "currency": null,
+          "requested_limit": "4000.00"
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.04102100001546205,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "intent-12",
+        "kind": "intent",
+        "category": "paraphrase",
+        "expected": {
+          "intent": "credit_limit_query",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.031806000038159254,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "intent-13",
+        "kind": "intent",
+        "category": "paraphrase",
+        "expected": {
+          "intent": "credit_interview",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.031534999948235054,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "intent-14",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "USD",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": "USD",
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03159699997468124,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-15",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "EUR",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": "EUR",
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.02833300004567718,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-16",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "ARS",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": "ARS",
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.02883300010125822,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-17",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "GBP",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": "GBP",
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.025391000008312403,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-18",
+        "kind": "intent",
+        "category": "clear",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "JPY",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": "JPY",
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.026633999937075714,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-19",
+        "kind": "intent",
+        "category": "paraphrase",
+        "expected": {
+          "intent": "exchange_quote",
+          "currency": "USD",
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "exchange_quote",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.0318900000593203,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "intent-20",
+        "kind": "intent",
+        "category": "ambiguous",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.05592600007275905,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-21",
+        "kind": "intent",
+        "category": "contradiction",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.007516999971812766,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-22",
+        "kind": "intent",
+        "category": "negation",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.005466000061460363,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-23",
+        "kind": "intent",
+        "category": "hypothetical",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.0063989999716795865,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-24",
+        "kind": "intent",
+        "category": "ambiguous",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.0056249999715873855,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-25",
+        "kind": "intent",
+        "category": "adversarial",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.00514099997417361,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-26",
+        "kind": "intent",
+        "category": "adversarial",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.007045999950605619,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-27",
+        "kind": "intent",
+        "category": "out_of_scope",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.031051000064508116,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-28",
+        "kind": "intent",
+        "category": "out_of_scope",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.03196000000116328,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-29",
+        "kind": "intent",
+        "category": "out_of_scope",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.026377000040156418,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "intent-30",
+        "kind": "intent",
+        "category": "ambiguous",
+        "expected": {
+          "intent": "unknown",
+          "currency": null,
+          "requested_limit": null
+        }
+      },
+      "actual": {
+        "intent": "unknown",
+        "currency": null,
+        "requested_limit": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.022639000007984578,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-31",
+        "kind": "field",
+        "category": "numeric",
+        "expected": {
+          "value": "1500.50"
+        }
+      },
+      "actual": {
+        "value": "1500.50"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.010832000043592416,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-32",
+        "kind": "field",
+        "category": "numeric",
+        "expected": {
+          "value": "1500.50"
+        }
+      },
+      "actual": {
+        "value": "1500.50"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.008967999974629492,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-33",
+        "kind": "field",
+        "category": "numeric",
+        "expected": {
+          "value": "0.00"
+        }
+      },
+      "actual": {
+        "value": "0.00"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.006288000008680683,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-34",
+        "kind": "field",
+        "category": "paraphrase",
+        "expected": {
+          "value": "4000.00"
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.005981999947834993,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "field-35",
+        "kind": "field",
+        "category": "ambiguous",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.004780999915965367,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-36",
+        "kind": "field",
+        "category": "invalid",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.0026540000135355513,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-37",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "formal"
+        }
+      },
+      "actual": {
+        "value": "formal"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.05832700003338687,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-38",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "autonomo"
+        }
+      },
+      "actual": {
+        "value": "autonomo"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.008756999932302278,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-39",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "desempregado"
+        }
+      },
+      "actual": {
+        "value": "desempregado"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.006088000077397737,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-40",
+        "kind": "field",
+        "category": "negation",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.004837000005863956,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-41",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "2"
+        }
+      },
+      "actual": {
+        "value": "2"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.199193999947056,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-42",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "0"
+        }
+      },
+      "actual": {
+        "value": "0"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.012734000051750627,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-43",
+        "kind": "field",
+        "category": "numeric",
+        "expected": {
+          "value": "2"
+        }
+      },
+      "actual": {
+        "value": "2"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.008511000032740412,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-44",
+        "kind": "field",
+        "category": "ambiguous",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.009771999998520187,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-45",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "sim"
+        }
+      },
+      "actual": {
+        "value": "sim"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.003855000045405177,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-46",
+        "kind": "field",
+        "category": "clear",
+        "expected": {
+          "value": "nao"
+        }
+      },
+      "actual": {
+        "value": "nao"
+      },
+      "source": "deterministic",
+      "latency_ms": 0.002582000092843373,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-47",
+        "kind": "field",
+        "category": "conditional",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.004773000000568572,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-48",
+        "kind": "field",
+        "category": "paraphrase",
+        "expected": {
+          "value": "USD"
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.02491500003998226,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": false
+    },
+    {
+      "case": {
+        "id": "field-49",
+        "kind": "field",
+        "category": "ambiguous",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.023863000023993663,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    },
+    {
+      "case": {
+        "id": "field-50",
+        "kind": "field",
+        "category": "unsupported",
+        "expected": {
+          "value": null
+        }
+      },
+      "actual": {
+        "value": null
+      },
+      "source": "deterministic",
+      "latency_ms": 0.004004000061286206,
+      "error": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "passed": true
+    }
+  ]
+}

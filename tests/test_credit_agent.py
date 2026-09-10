@@ -237,7 +237,10 @@ def test_credit_agent_clarifies_unknown_or_ambiguous_action() -> None:
     )
     state = agent.respond(make_state(), "preciso de um fôlego de quatro mil")
     assert state["last_interpretation_source"] == "llm"
+    assert state["credit_stage"] == "confirming_interpreted_limit"
     assert customers.customer is not None
+    assert customers.customer.credit_limit == make_customer().credit_limit
+    state = agent.respond(state, "sim")
     assert customers.customer.credit_limit == Decimal("4000.00")
 
 
@@ -599,3 +602,33 @@ def test_credit_agent_requires_pending_limit_for_reanalysis() -> None:
 
     with pytest.raises(ValueError, match="pending requested limit"):
         agent.reanalyze_pending_request(make_state())
+
+
+@pytest.mark.parametrize("answer", ["talvez", "sim, mas só se não tiver custo", "sim e não"])
+def test_inferred_limit_needs_unconditional_confirmation(answer: str) -> None:
+    agent, customers, _, requests, _ = make_agent(
+        intent_interpreter=IntentInterpreterStub(
+            IntentInterpretation(
+                intent="credit_limit_adjustment",
+                source="llm",
+                requested_limit=Decimal("4000.00"),
+            )
+        ),
+    )
+    state = agent.respond(make_state(), "mais fôlego no cartão")
+    state = agent.respond(state, answer)
+    assert state["credit_stage"] == "confirming_interpreted_limit"
+    assert not requests.requests
+    assert customers.customer is not None
+    assert customers.customer.credit_limit == make_customer().credit_limit
+    state = agent.respond(state, "não")
+    assert state["credit_stage"] == "awaiting_requested_limit"
+    assert state["requested_credit_limit"] is None
+    assert not requests.requests
+
+
+def test_credit_agent_does_not_override_unknown_intent_with_keyword_routing() -> None:
+    agent, _, _, requests, _ = make_agent()
+    state = agent.respond(make_state(), "não quero aumentar meu limite")
+    assert state["credit_stage"] == "awaiting_action"
+    assert not requests.requests

@@ -239,8 +239,12 @@ def test_workflow_uses_llm_intent_and_executes_handoff_in_same_turn() -> None:
     state = workflow.respond(state, "preciso de um fôlego de quatro mil no cartão")
 
     assert state["turn_number"] == 3
-    assert state["active_agent"] == "triage"
+    assert state["active_agent"] == "credit"
+    assert state["credit_stage"] == "confirming_interpreted_limit"
     assert "R$ 4.000,00" in state["assistant_message"]
+    state = workflow.respond(state, "sim")
+    assert state["active_agent"] == "triage"
+    assert "aprovada" in state["assistant_message"]
 
 
 def test_workflow_routes_existing_exchange_state_from_graph_start() -> None:

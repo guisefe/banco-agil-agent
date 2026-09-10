@@ -43,7 +43,13 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check
-        run: uv run mypy app tests
+        run: uv run mypy app tests evaluation scripts
+
+      - name: Run offline demonstration
+        run: uv run python -m scripts.demo_credit
+
+      - name: Evaluate local interpretation
+        run: uv run python -m evaluation.run --mode local --output /tmp/banking-local-eval.json
 
       - name: Run tests
         run: uv run pytest

@@ -29,28 +29,6 @@ from app.tools.money import format_brl, parse_money
 
 CreditAction = Literal["query_limit", "query_score", "adjust"]
 
-_ACTION_TERMS: Mapping[CreditAction, frozenset[str]] = {
-    "query_limit": frozenset(
-        {"consultar limite", "consulta de limite", "limite atual", "qual meu limite"}
-    ),
-    "query_score": frozenset(
-        {"consultar score", "consulta de score", "qual meu score", "saber meu score", "ver score"}
-    ),
-    "adjust": frozenset(
-        {
-            "ajustar",
-            "ajuste",
-            "aumentar",
-            "aumento",
-            "reduzir",
-            "reducao",
-            "diminuir",
-            "novo limite",
-            "mais limite",
-            "solicitar limite",
-        }
-    ),
-}
 _CREDIT_DECISION_LOCK = Lock()
 
 
@@ -101,6 +79,8 @@ class CreditAgent:
             return self._choose_action(next_state, user_message)
         if state["credit_stage"] == "awaiting_requested_limit":
             return self._analyze_adjustment(next_state, user_message)
+        if state["credit_stage"] == "confirming_interpreted_limit":
+            return self._confirm_interpreted_limit(next_state, user_message)
         if state["credit_stage"] == "confirming_limit_reduction":
             return self._handle_limit_reduction_confirmation(next_state, user_message)
         if state["credit_stage"] == "offering_interview":
@@ -131,8 +111,6 @@ class CreditAgent:
             state["interpreted_requested_limit"] = interpretation.requested_limit
             action = _action_from_interpretation(interpretation.intent)
         if action is None:
-            action = _identify_action(user_message)
-        if action is None:
             state["assistant_message"] = (
                 "Posso consultar ou ajustar seu limite e informar seu score interno. "
                 "O que você deseja?"
@@ -143,6 +121,8 @@ class CreditAgent:
             state["interpreted_requested_limit"] = None
             state["credit_stage"] = "awaiting_requested_limit"
             if interpreted_limit is not None:
+                if state["last_interpretation_source"] == "llm":
+                    return self._ask_limit_confirmation(state, interpreted_limit)
                 with _CREDIT_DECISION_LOCK:
                     return self._process_adjustment(state, interpreted_limit)
             state["assistant_message"] = "Qual é o novo limite total que você deseja?"
@@ -194,7 +174,44 @@ class CreditAgent:
                     "Informe um valor válido para o novo limite, por exemplo R$ 5.000,00."
                 )
                 return state
+            if interpretation.source == "llm":
+                return self._ask_limit_confirmation(state, requested_limit)
 
+        with _CREDIT_DECISION_LOCK:
+            return self._process_adjustment(state, requested_limit)
+
+    @staticmethod
+    def _ask_limit_confirmation(
+        state: ConversationState,
+        requested_limit: Decimal,
+    ) -> ConversationState:
+        state["requested_credit_limit"] = requested_limit
+        state["credit_stage"] = "confirming_interpreted_limit"
+        state["assistant_message"] = (
+            f"Entendi que você deseja um limite total de {format_brl(requested_limit)}. "
+            "Esse valor está correto? Responda sim ou não."
+        )
+        return state
+
+    def _confirm_interpreted_limit(
+        self,
+        state: ConversationState,
+        user_message: str,
+    ) -> ConversationState:
+        # Consent is explicit; never ask a model to infer it.
+        answer = normalize_text(user_message).strip(".!? ")
+        if answer == "nao":
+            state["requested_credit_limit"] = None
+            state["credit_stage"] = "awaiting_requested_limit"
+            state["assistant_message"] = "Qual é o novo limite total? Digite o valor em números."
+            return state
+        if answer != "sim":
+            state["assistant_message"] = "Preciso de sim ou não para confirmar o valor."
+            return state
+        requested_limit = state["requested_credit_limit"]
+        if requested_limit is None:
+            return self._repository_failure(state)
+        state["credit_stage"] = "awaiting_requested_limit"
         with _CREDIT_DECISION_LOCK:
             return self._process_adjustment(state, requested_limit)
 
@@ -554,22 +571,6 @@ class CreditAgent:
             raise ValueError("credit agent requires an authenticated customer")
         if state["active_agent"] != "credit":
             raise ValueError("credit agent cannot respond outside its scope")
-
-
-def _identify_action(message: str) -> CreditAction | None:
-    normalized_message = normalize_text(message)
-    matches = {
-        action
-        for action, terms in _ACTION_TERMS.items()
-        if any(term in normalized_message for term in terms)
-    }
-    if any(term in normalized_message.split() for term in {"consultar", "consulta"}) and (
-        "query_score" not in matches
-    ):
-        matches.add("query_limit")
-    if len(matches) != 1:
-        return None
-    return matches.pop()
 
 
 def _action_from_interpretation(intent: IntentName | None) -> CreditAction | None:

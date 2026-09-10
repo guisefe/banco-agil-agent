@@ -16,7 +16,7 @@ SCENARIOS = (
 
 
 def main() -> None:
-    source = Path(__file__).resolve().parents[1] / "data"
+    source = Path(__file__).resolve().parents[1] / "demo" / "fixtures"
     for name, cpf, birth, amount, expected_status, expected_limit in SCENARIOS:
         with TemporaryDirectory(prefix="banking-demo-") as directory:
             root = Path(directory)

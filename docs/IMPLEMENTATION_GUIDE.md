@@ -1,3 +1,8 @@
+> O [README](../README.md) contém os comandos atuais e o resumo de escopo.
+> Desde a versão demonstrável de setembro, valores interpretados pela LLM exigem confirmação
+> explícita, o interpretador foi separado em módulos e há avaliação em `evaluation/`.
+> Para uma sessão restaurável, use `uv run python -m scripts.launch_demo`.
+
 # Banco Ágil
 
 [![CI](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/guisefe/banco-agil-agent/actions/workflows/ci.yml)
@@ -310,7 +315,7 @@ da CI usam referências imutáveis; o container executa com usuário sem privil�
 3. Em uma nova conversa, envie “qual é meu limite?” antes de autenticar como Ana; o pedido deve
    ser retomado sem repetição.
 4. Consulte o score e escreva “preciso de um fôlego de quatro mil no cartão”.
-5. Confirme `LLM ativa` na barra lateral e observe a decisão determinística.
+5. Confirme `LLM ativa`, confira o valor interpretado e responda sim para processar a decisão.
 6. Peça um limite menor que o atual, confirme a redução e consulte o limite novamente.
 7. Autentique-se como Mariana, solicite aumento e conclua a entrevista em linguagem natural.
 8. Confirme a reanálise automática do pedido original.

@@ -25,6 +25,7 @@ CreditStage = Literal[
     "awaiting_action",
     "awaiting_requested_limit",
     "confirming_limit_reduction",
+    "confirming_interpreted_limit",
     "offering_interview",
 ]
 

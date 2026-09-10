@@ -293,3 +293,84 @@ def test_intent_model_rejects_invalid_combinations() -> None:
     for arguments in invalid_combinations:
         with pytest.raises(ValueError):
             IntentInterpretation(**cast(Any, arguments))
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Não quero aumentar meu limite",
+        "Se eu aumentar meu limite, muda a taxa?",
+        "Quero aumentar e reduzir meu limite",
+        "Quero limite de 4000 ou 5000",
+    ],
+)
+def test_local_interpreter_clarifies_non_actionable_requests(message: str) -> None:
+    assert DeterministicConversationInterpreter().interpret(message).intent == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("message", "expected", "value"),
+    [
+        ("1500.50", "money", "1500.50"),
+        ("NaN", "money", None),
+        ("Não tenho carteira assinada", "employment", None),
+        ("Tenho duas pessoas dependentes", "dependents", "2"),
+        ("Uma ou duas pessoas", "dependents", None),
+        ("2", "dependents", "2"),
+    ],
+)
+def test_local_fields_do_not_guess_ambiguous_values(
+    message: str,
+    expected: ExpectedField,
+    value: str | None,
+) -> None:
+    assert (
+        DeterministicConversationInterpreter()
+        .interpret_field(
+            message,
+            expected=expected,
+        )
+        .value
+        == value
+    )
+
+
+def test_local_amount_preserves_decimal_separator() -> None:
+    result = DeterministicConversationInterpreter().interpret("Quero limite de 1500.50")
+    assert result.requested_limit == Decimal("1500.50")
+
+
+def test_provider_records_usage_and_resets_between_calls() -> None:
+    responses = iter(
+        [
+            httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": '{"value":"sim"}'}}],
+                    "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": '{"value":"nao"}'}}],
+                },
+            ),
+        ]
+    )
+    interpreter = OpenAICompatibleConversationInterpreter(
+        api_key="test-only",
+        base_url="https://provider.example/v1",
+        model="test",
+        transport=httpx.MockTransport(lambda _: next(responses)),
+    )
+    interpreter.interpret_field("sim", expected="yes_no")
+    assert (
+        interpreter.last_requests,
+        interpreter.last_input_tokens,
+        interpreter.last_output_tokens,
+    ) == (1, 12, 3)
+    interpreter.interpret_field("não", expected="yes_no")
+    assert interpreter.last_requests == 1
+    assert interpreter.last_input_tokens is None
+    assert interpreter.last_output_tokens is None

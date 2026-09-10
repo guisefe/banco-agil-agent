@@ -18,10 +18,11 @@ git clone https://github.com/guisefe/banco-agil-agent.git
 cd banco-agil-agent
 cp .env.example .env
 uv sync --locked --dev
-uv run streamlit run streamlit_app.py
+uv run python -m scripts.launch_demo
 ```
 
-Abra `http://localhost:8501`. Sem chave, a interpretação é local e determinística.
+Abra `http://localhost:8501`. Cada execução começa com cópias temporárias das fixtures;
+feche e execute novamente para restaurar os cenários. Sem chave, a interpretação é local.
 Para experimentar a LLM, configure `GROQ_API_KEY` no `.env` e reinicie a aplicação.
 A interface informa se o último turno utilizou a LLM ou o fallback.
 
@@ -32,6 +33,8 @@ A interface informa se o último turno utilizou a LLM ou o fallback.
 - Entrevista financeira com recálculo e reanálise do pedido pendente.
 - Consulta cambial com provedores alternativos e falha controlada.
 - Validação de respostas do modelo, timeout, tentativas limitadas e fallback.
+- Confirmação explícita de valores interpretados pela LLM antes do processamento.
+- Avaliação versionada com 50 casos em português e relatório de acertos, erros e latência.
 - Auditoria pseudonimizada, testes, tipagem estrita e CI.
 
 ## Arquitetura e responsabilidades
@@ -42,7 +45,7 @@ A interface informa se o último turno utilizou a LLM ou o fallback.
 | LangGraph / agentes | Estado da conversa e transições entre quatro especialidades |
 | `ProcessCreditIncrease` | Coordenar política, auditoria e persistência do aumento |
 | `evaluate_increase` | Avaliar o valor solicitado contra o teto permitido, sem I/O |
-| Interpretadores | Classificar intenção e normalizar campos; validar saída da LLM |
+| Interpretadores | Módulos separados para regras locais, provedor HTTP e fallback |
 | Repositórios | Ler política, acessar clientes, persistir pedidos e consultar câmbio |
 
 A separação do aumento é a primeira etapa da refatoração: redução, entrevista e seus efeitos
@@ -67,7 +70,7 @@ estão no [guia de implementação](docs/IMPLEMENTATION_GUIDE.md).
 ```bash
 uv run ruff format --check .
 uv run ruff check .
-uv run mypy app tests
+uv run mypy app tests evaluation scripts
 uv run pytest
 ```
 
@@ -82,7 +85,24 @@ local. O gate de cobertura é 90% com branches; cobertura não mede acurácia da
   como modelo de risco real.
 - A mensagem corrente enviada à LLM pode conter valores financeiros. A redação de padrões de
   CPF/data não elimina dados pessoais arbitrários: use apenas dados sintéticos nesta demo.
-- Benchmark de linguagem natural, latência de provedor e impacto de negócio ainda não publicado.
+- O conjunto de desenvolvimento passou de 30/50 para 43/50 saídas corretas no modo local.
+  Isso não mede generalização. Comparação com LLM real e impacto de negócio ainda pendentes.
+
+## Avaliar a linguagem
+
+```bash
+uv run python -m evaluation.run --mode local --output /tmp/banking-local.json
+uv run python -m evaluation.run --mode llm --output /tmp/banking-llm.json
+uv run python -m evaluation.run --mode hybrid --output /tmp/banking-hybrid.json
+```
+
+`llm` mede o provedor sem fallback; `hybrid` mede o comportamento com contingência.
+Os dois exigem chave configurada. O comando falha claramente se ela estiver ausente.
+O relatório distingue intenção, entidades, campos, recusas, erros e chamadas HTTP.
+Tokens ausentes e custo real desconhecido permanecem nulos.
+
+[Resultados e limitações](evaluation/README.md) incluem as sete paráfrases ainda não entendidas
+pelo modo local. Nenhum resultado de LLM é simulado como medição real.
 
 Consulte [privacidade e auditoria](docs/PRIVACY_AND_AUDIT.md),
 [roteiro do case](docs/CASE_STUDY.md) e [plano de evolução](https://github.com/guisefe/banco-agil-agent/issues/26).

@@ -9,7 +9,8 @@ validated underwriting, cost reduction or production readiness.
 ## Two-minute demonstration
 
 1. Show the application and the effective interpretation mode.
-2. Authenticate as Ana; request an allowed increase and inspect the persisted synthetic result.
+2. Authenticate as Ana; request an allowed increase, confirm the amount if interpreted by the
+   model, and inspect the persisted synthetic result.
 3. Restart with fresh demo fixtures; show a rejected increase and the interview offer.
 4. Show Mariana's absent-score path: absence differs from a score of zero.
 5. Point to provider failure/invalid-response tests and the offline demo. Disabling a key proves
@@ -25,6 +26,13 @@ Use `uv run python -m scripts.demo_credit` for a repeatable offline evidence che
 - Why an audit decision event does not prove persistence completion.
 - What CSV compensation can and cannot recover from.
 - Why regex redaction does not imply that all sensitive data is excluded from a prompt.
+
+## Measured local evidence
+
+The 50-case development set improved from 30 to 43 exact output matches after conservative
+ambiguity handling and numeric parsing fixes. See [evaluation](../evaluation/README.md).
+This is a before/after diagnostic on cases used during development, not a held-out accuracy
+claim. Seven paraphrases remain unsupported locally. The live-model comparison is pending.
 
 ## Evidence still needed before publishing quantitative AI claims
 
